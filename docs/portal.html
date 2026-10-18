@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en" data-site-version="portal-p1">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>JVVNL Quiz Portal</title>
+<link rel="icon" href="./favicon.svg">
+<link rel="stylesheet" href="./portal.css?v=p13">
+</head>
+<body>
+<div class="topbar">
+  <span class="brand" id="brand">JVVNL Quiz Portal</span>
+  <span class="sp"></span>
+  <span id="userBadge"></span>
+  <button class="chipbtn hidden" id="logoutBtn" type="button">Logout</button>
+</div>
+<div class="wrap" id="app"><div class="card center muted">Loading…</div></div>
+<nav class="navbar hidden" id="navbar">
+  <a href="#/home" data-nav="home">Home</a>
+  <a href="#/dashboard" data-nav="dashboard">Dashboard</a>
+  <a href="#/admin" data-nav="admin" id="navAdmin" class="hidden">Admin</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="./portal.js?v=p13"></script>
+</body>
+</html>
