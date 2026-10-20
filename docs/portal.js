@@ -727,6 +727,16 @@ async function route(){const h=location.hash||'#/home';
   return vHome();}
 document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut();S.profile=null;S.qcache={};S.access=null;S.accessOk=false;S.notes=null;S.subjects=null;location.hash='#/login';route();};
 window.addEventListener('hashchange',route);
+setInterval(async()=>{try{
+  if(!S.session||document.hidden)return;
+  const sig=()=>JSON.stringify([S.profile&&[S.profile.is_paid,S.profile.paid_until,S.profile.access_scope,S.profile.is_admin],S.access||[]]);
+  const before=sig();
+  await fetchProfile();
+  const r=await sb.rpc('my_access');if(!r.error){S.access=Array.isArray(r.data)?r.data:[];S.accessOk=true;}
+  S.entAt=Date.now();
+  if(sig()!==before){S.qcache={};const v=(location.hash||'#/home').split('/')[1];
+    if(['home','subject','mocksetup','notes','course','dashboard'].includes(v))route();}
+}catch(e){}},20000);
 function vReset(){document.getElementById('navbar').classList.add('hidden');document.getElementById('logoutBtn').classList.add('hidden');
   setApp(`<div class="card center"><h2>Naya password set karo</h2></div>
   <div class="card"><label>New password (6+ characters)</label><input id="fNewPass" type="password" autocomplete="new-password">
