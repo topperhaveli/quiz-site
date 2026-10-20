@@ -22,6 +22,8 @@ const planChip=()=>{
   const d=Math.ceil((new Date(p.paid_until).getTime()-Date.now())/86400000);
   if(d<0)return '<span class="badge warn">Plan khatam ho gaya</span>';
   return `<span class="badge ${d<=7?'warn':'paid'}">${d} din bache</span>`;};
+const isPYQ=q=>!!q&&(/^pyq/i.test(q.id||'')||(!/original|notes|batch|bank|uploaded|unlabel|not detected/i.test(q.source||'')&&/SSC|UGC|NABARD|JAIIB|ICMAI|RPSC|RSMSSB|PYQ|Recall|\u092a\u093f\u091b\u0932\u0947/i.test(q.source||'')));
+const qType=q=>isPYQ(q)?'PYQ':'Practice';
 const isAdmin=()=>!!(S.profile&&S.profile.is_admin);
 
 async function fetchProfile(){const{data}=await sb.from('profiles').select('*').eq('id',S.session.user.id).single();S.profile=data;
@@ -124,12 +126,12 @@ async function vPractice(slug){nav('home');
   const atts=await fetchAttempts();
   const amap={};atts.forEach(a=>amap[a.question_id]=a);
   if(!qs.length){setApp('<div class="card center"><h3>No access</h3><p class="muted">Is subject ke questions abhi locked hain.</p><a class="btn block" href="#/home">Back</a></div>');return;}
-  const sources=[...new Set(qs.map(q=>q.source).filter(Boolean))];
+  const sources=[...new Set(qs.map(qType))];
   let idx=0,filter='all',src='all';
-  const filtered=()=>qs.filter(q=>(src==='all'||q.source===src)&&(filter==='all'||(filter==='unanswered'&&amap[q.id]===undefined)||(filter==='wrong'&&amap[q.id]&&!amap[q.id].correct)||(filter==='correct'&&amap[q.id]&&amap[q.id].correct)));
+  const filtered=()=>qs.filter(q=>(src==='all'||qType(q)===src)&&(filter==='all'||(filter==='unanswered'&&amap[q.id]===undefined)||(filter==='wrong'&&amap[q.id]&&!amap[q.id].correct)||(filter==='correct'&&amap[q.id]&&amap[q.id].correct)));
   function render(){const list=filtered();if(idx>=list.length)idx=Math.max(0,list.length-1);
     const q=list[idx];
-    const srcOpts=['<option value="all">All sources/chapters</option>'].concat(sources.map(s=>`<option ${s===src?'selected':''} value="${esc(s)}">${esc(s)}</option>`)).join('');
+    const srcOpts=['<option value="all">All questions</option>'].concat(sources.map(s=>`<option ${s===src?'selected':''} value="${esc(s)}">${esc(s)}</option>`)).join('');
     if(!q){setApp(`<div class="card"><div class="row"><a class="chipbtn" href="#/subject/${slug}">&lsaquo; Back</a></div>
       <div class="row mt"><select id="fSrc">${srcOpts}</select></div>
       <div class="row mt">${['all','unanswered','wrong','correct'].map(f=>`<button class="chipbtn ${f===filter?'on':''}" data-f="${f}" type="button">${f}</button>`).join('')}</div>
@@ -138,7 +140,7 @@ async function vPractice(slug){nav('home');
     setApp(`<div class="card"><div class="row"><a class="chipbtn" href="#/subject/${slug}">&lsaquo; Back</a><span class="muted">${idx+1} / ${list.length}</span><span class="sp"></span><span class="muted">${esc(subjName(slug))}</span></div>
     <div class="row mt"><select id="fSrc">${srcOpts}</select></div>
     <div class="row mt">${['all','unanswered','wrong','correct'].map(f=>`<button class="chipbtn ${f===filter?'on':''}" data-f="${f}" type="button">${f}</button>`).join('')}</div></div>
-    <div class="card"><p class="muted">${esc(q.source||'')}</p><p class="qtext">${esc(q.question)}</p>
+    <div class="card"><p><span class="badge ${isPYQ(q)?'paid':'free'}">${qType(q)}</span></p><p class="qtext">${esc(q.question)}</p>
     ${q.options.map((o,i)=>`<button class="opt ${done&&i===q.answer?'right':''} ${done&&i===a.chosen&&i!==q.answer?'wrong':''}" data-i="${i}" type="button" ${done?'disabled':''}>${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
     ${done?`<div class="expl"><b>Answer: ${String.fromCharCode(65+q.answer)}</b>${q.explanation?'<br>'+md(q.explanation):''}</div>`:''}
     <div class="row mt"><button class="btn" id="prevB" type="button" ${idx===0?'disabled':''}>&lsaquo; Prev</button><span class="sp"></span><button class="btn" id="nextB" type="button" ${idx>=list.length-1?'disabled':''}>Next &rsaquo;</button></div></div>`);
@@ -197,7 +199,7 @@ async function vMockRun(id){nav('home');
     const answered=Object.keys(st.answers).length;
     setApp(`<div class="card"><div class="row"><span class="muted">Mock · ${esc(subjName(m.subject_slug))}</span><span class="sp"></span><span class="timer" id="mTimer"></span></div>
     <div class="row mt"><span class="muted">Q ${st.idx+1} / ${list.length} · answered ${answered}</span></div></div>
-    <div class="card"><p class="muted">${esc(q.source||'')}</p><p class="qtext">${esc(q.question)}</p>
+    <div class="card"><p><span class="badge ${isPYQ(q)?'paid':'free'}">${qType(q)}</span></p><p class="qtext">${esc(q.question)}</p>
     ${q.options.map((o,i)=>`<button class="opt ${sel===i?'sel':''}" data-i="${i}" type="button">${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
     <div class="row mt"><button class="btn" id="mPrev" type="button" ${st.idx===0?'disabled':''}>&lsaquo; Prev</button><span class="sp"></span><button class="btn" id="mNext" type="button" ${st.idx>=list.length-1?'disabled':''}>Next &rsaquo;</button></div>
     <button class="btn primary block" id="mFinish" type="button">Submit mock</button></div>`);
@@ -232,7 +234,7 @@ async function vMockReview(id){nav('home');
   const ans=(m.state&&m.state.answers)||{};
   setApp(`<div class="card"><div class="row"><a class="chipbtn" href="#/dashboard">&lsaquo; Dashboard</a><span class="sp"></span><span class="muted">Score ${m.score}/${m.total}</span></div></div>`+
     m.config.question_ids.map((qid,n)=>{const q=byId[qid];if(!q)return'';const c=ans[qid];
-    return `<div class="card"><p class="muted">Q${n+1} · ${esc(q.source||'')}</p><p class="qtext">${esc(q.question)}</p>
+    return `<div class="card"><p class="muted">Q${n+1} · ${qType(q)}</p><p class="qtext">${esc(q.question)}</p>
     ${q.options.map((o,i)=>`<button class="opt ${i===q.answer?'right':''} ${c===i&&i!==q.answer?'wrong':''}" disabled type="button">${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
     ${q.explanation?`<div class="expl">${md(q.explanation)}</div>`:''}</div>`;}).join(''));}
 
@@ -253,8 +255,8 @@ async function vDashboard(){nav('dashboard');await fetchSubjects();
     if(lb&&lb.length){const sorted=[...lb].sort((a,b)=>b.pct-a.pct||b.correct-a.correct);
       const pos=sorted.findIndex(r=>r.user_id===S.session.user.id);
       if(pos>=0)rankHtml=`<div class="stat"><b>#${pos+1} <span class="muted">of ${sorted.length}</span></b><span>All-time rank</span></div>`;}
-    const{data:wj}=await sb.from('attempts').select('correct, questions(source)').eq('user_id',S.session.user.id).limit(5000);
-    const bySrc={};(wj||[]).forEach(r=>{const s=(r.questions&&r.questions.source)||'Other';bySrc[s]=bySrc[s]||{n:0,c:0};bySrc[s].n++;if(r.correct)bySrc[s].c++;});
+    const{data:wj}=await sb.from('attempts').select('correct, questions(id,source)').eq('user_id',S.session.user.id).limit(5000);
+    const bySrc={};(wj||[]).forEach(r=>{const s=r.questions?qType(r.questions):'Practice';bySrc[s]=bySrc[s]||{n:0,c:0};bySrc[s].n++;if(r.correct)bySrc[s].c++;});
     const weak=Object.entries(bySrc).filter(([,v])=>v.n>=5).map(([k,v])=>({k,pct:Math.round(100*v.c/v.n),n:v.n})).sort((a,b)=>a.pct-b.pct).slice(0,5);
     paidHtml=`<div class="card"><h3>Weak topics (paid)</h3>${weak.length?weak.map(w=>`<div class="row"><span style="flex:1">${esc(w.k)}</span><span class="badge ${w.pct<50?'warn':'free'}">${w.pct}%</span><span class="muted">${w.n} Q</span></div>`).join(''):'<p class="muted">Thodi aur practice karo, phir analysis dikhega.</p>'}</div>
     <div class="card"><h3>Rank (paid)</h3><div class="grid2">${rankHtml}<div class="stat"><b>${totalA}</b><span>Total answered</span></div></div></div>`;}
