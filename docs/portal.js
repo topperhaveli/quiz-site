@@ -6,7 +6,7 @@ const app=document.getElementById('app');
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const md=s=>esc(s||'').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
 let S={session:null,profile:null,subjects:null,config:{free_question_count:50,free_mock_per_subject:true,paid_validity_days:120},qcache:{}};
-const isPaid=()=>!!(S.profile&&(S.profile.is_admin||(S.profile.is_paid&&(!S.profile.paid_until||new Date(S.profile.paid_until).getTime()>Date.now()))));
+const isPaid=()=>!!(S.profile&&(S.profile.is_admin||(S.profile.is_paid&&(S.profile.access_scope||'all')==='all'&&(!S.profile.paid_until||new Date(S.profile.paid_until).getTime()>Date.now()))));
 const activePlan=u=>!!(u&&u.is_paid&&(!u.paid_until||new Date(u.paid_until).getTime()>Date.now()));
 const planStatus=u=>{
   if(!u.is_paid)return{t:'FREE',c:'free'};
@@ -237,8 +237,8 @@ async function vSubject(slug){nav('home');await fetchSubjects();
   const card=(ic,t,sub,cnt,href,btn,dis)=>`<div class="card pad scrd ${dis?'dis':''}"><span class="itile t-acc">${svg(ic)}</span><h3 class="h3">${t}</h3><p class="sub">${sub}</p>${cnt?`<div class="cnt">${cnt}<small> questions</small></div>`:''}${dis?`<span class="btn" aria-disabled="true">${btn}</span>`:`<a class="btn primary" href="${href}">${btn} ${svg('arrow')}</a>`}</div>`;
   setApp(`<div class="crumb"><a href="#/home">Dashboard</a> &rsaquo; ${esc(subjName(slug))}</div><h1 class="h1 sm">${esc(subjName(slug))}</h1><p class="lead">Choose how you want to study. MCQ, previous-year questions and notes are kept separate.</p>
   <div class="trio">
-   ${card('list','MCQ Practice','Topic-wise practice questions with explanations.',nM,'#/practice/'+slug+'/Practice',nM?'Start MCQs':'Not in your plan',!nM)}
-   ${card('file','Previous Year Questions','Real exam questions from 2018 onwards.',nP,'#/practice/'+slug+'/PYQ',nP?'Start PYQs':'Not in your plan',!nP)}
+   ${card('list','MCQ Practice','Topic-wise practice questions with explanations.',nM,'#/practice/'+slug+'/Practice',nM?'Start MCQs':(paid?'MCQs abhi add nahi hue':'Not in your plan'),!nM)}
+   ${card('file','Previous Year Questions','Real exam questions from 2018 onwards.',nP,'#/practice/'+slug+'/PYQ',nP?'Start PYQs':(paid?'PYQs abhi add nahi hue':'Not in your plan'),!nP)}
    ${card('book','Study Notes','Short notes and revision material (PDF).',nN?nN+'<small> files</small>':null,'#/notes/'+slug,nN?'Open Notes':'Coming soon',!nN).replace('<small> questions</small>','')}
    ${card('clock','Mock Test',paid?'Timed test, choose your size.':'1 free timed mock for this subject.',null,'#/mocksetup/'+slug,'Start Mock')}
   </div>`);}
@@ -268,8 +268,7 @@ async function vPractice(slug,initSrc){nav('home');
     ${q.options.map((o,i)=>`<button class="opt ${done&&i===q.answer?'right':''} ${done&&i===a.chosen&&i!==q.answer?'wrong':''}" data-i="${i}" type="button" ${done?'disabled':''}>${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
     ${done?`<div class="expl"><b>Answer: ${String.fromCharCode(65+q.answer)}</b>${q.explanation?'<br>'+md(q.explanation):''}</div>`:''}
     <div class="row mt"><button class="btn" id="prevB" type="button" ${idx===0?'disabled':''}>&lsaquo; Prev</button><span class="sp"></span><button class="btn" id="nextB" type="button" ${idx>=list.length-1?'disabled':''}>Next &rsaquo;</button></div>
-    <div class="row mt"><button class="chipbtn" id="doubtB" type="button">? Doubt poochho</button></div>
-    <div id="doubtBox" class="hidden mt"><textarea id="doubtT" rows="3" maxlength="600" placeholder="Is question me kya samajh nahi aaya? Apna doubt likho."></textarea><div class="row mt" style="gap:8px"><button class="btn primary" id="doubtSend" type="button">Bhejo</button><span class="muted small" id="doubtMsg"></span></div></div></div>`);
+    </div>`);
     wire(list,q);if(window.__keepScroll){window.scrollTo(0,sy);window.__keepScroll=0;}}
   function wire(list,q){document.getElementById('fSrc').onchange=e=>{src=e.target.value;idx=0;render();};
     document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;idx=0;render();});
@@ -277,10 +276,6 @@ async function vPractice(slug,initSrc){nav('home');
       const row={user_id:S.session.user.id,question_id:q.id,subject_slug:slug,chosen:i,correct:i===q.answer,mode:'practice'};
       amap[q.id]={...row};window.__keepScroll=1;render();
       sb.from('attempts').upsert(row,{onConflict:'user_id,question_id'}).then(r=>{if(r.error)console.warn(r.error)});});
-    {const db=document.getElementById('doubtB');if(db&&q){db.onclick=()=>{document.getElementById('doubtBox').classList.toggle('hidden');};
-      document.getElementById('doubtSend').onclick=async()=>{const t=document.getElementById('doubtT').value.trim();const m=document.getElementById('doubtMsg');if(t.length<5){m.textContent='Thoda detail me likho.';return;}
-        m.textContent='Bhej raha hoon…';const{error}=await sb.from('doubts').insert({question_id:q.id,subject_slug:slug,body:t});
-        if(error){m.textContent='Nahi gaya: '+error.message;return;}document.getElementById('doubtT').value='';m.textContent='Doubt bhej diya. Jawab "My Doubts" me milega.';};}}
     document.getElementById('prevB').onclick=()=>{if(idx>0){idx--;render();}};
     document.getElementById('nextB').onclick=()=>{if(idx<list.length-1){idx++;render();}};}}
   render();}
