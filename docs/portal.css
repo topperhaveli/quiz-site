@@ -183,3 +183,7 @@ td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
 #app [id]{scroll-margin-top:84px}.wrap{scroll-padding-top:84px}
 @media(max-width:1023px){.wrap{padding-bottom:120px}}
 html{scroll-padding-top:84px}
+
+textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font:inherit;background:#fff;color:inherit;resize:vertical;margin-top:6px}
+.annrow{padding:8px 0;border-bottom:1px solid var(--line)}.annrow:last-child{border-bottom:0}
+.annc{margin-bottom:14px}
