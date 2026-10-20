@@ -7,6 +7,7 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const md=s=>esc(s||'').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
 let S={session:null,profile:null,subjects:null,config:{free_question_count:50,free_mock_per_subject:true,paid_validity_days:120},qcache:{}};
 const isPaid=()=>!!(S.profile&&(S.profile.is_admin||(S.profile.is_paid&&(S.profile.access_scope||'all')==='all'&&(!S.profile.paid_until||new Date(S.profile.paid_until).getTime()>Date.now()))));
+const isScoped=()=>!!(S.profile&&!S.profile.is_admin&&activePlan(S.profile)&&S.profile.access_scope==='sections');
 const activePlan=u=>!!(u&&u.is_paid&&(!u.paid_until||new Date(u.paid_until).getTime()>Date.now()));
 const planStatus=u=>{
   if(!u.is_paid)return{t:'FREE',c:'free'};
@@ -35,7 +36,7 @@ const isAdmin=()=>!!(S.profile&&S.profile.is_admin);
 async function fetchProfile(){const{data}=await sb.from('profiles').select('*').eq('id',S.session.user.id).single();{const o=S.profile;if(o&&data&&(o.is_paid!==data.is_paid||o.paid_until!==data.paid_until||o.access_scope!==data.access_scope))S.qcache={};}S.profile=data;
   document.getElementById('navAdmin').classList.toggle('hidden',!isAdmin());['navAdmin2','sAdminLbl'].forEach(i=>{const e=document.getElementById(i);if(e)e.classList.toggle('hidden',!isAdmin());});
   const b=document.getElementById('userBadge');
-  b.innerHTML=isAdmin()?'<span class="badge warn">ADMIN</span>':(isPaid()?'<span class="badge paid">PAID</span>':'<span class="badge free">FREE</span>');}
+  b.innerHTML=isAdmin()?'<span class="badge warn">ADMIN</span>':(isPaid()?'<span class="badge paid">PAID</span>':(isScoped()?'<span class="badge paid">PLAN &middot; SECTIONS</span>':'<span class="badge free">FREE</span>'));}
 async function fetchSubjects(){if(S.subjects&&S.cfgDone)return;
   if(!S._subjP)S._subjP=Promise.all([sb.from('subjects').select('*').order('sort'),sb.from('app_config').select('*')]).then(([a,b])=>{S.subjects=a.data||[];(b.data||[]).forEach(r=>{try{S.config[r.key]=JSON.parse(r.value)}catch(e){S.config[r.key]=r.value}});S.cfgDone=true;S._subjP=null;}).catch(e=>{S._subjP=null;throw e;});
   await S._subjP;}
@@ -218,7 +219,7 @@ async function vHome(){nav('home');await fetchSubjects();
   <div class="hero"><div class="herol"><span class="semi">${svg('grad')} TOPPER HAVELI &middot; JVVNL JA</span>
    <h1 class="h1">Welcome back${nm?', '+esc(nm):''}!</h1>
    <p class="lead">${st.totalA?`You have solved <b>${st.totalA} questions</b> at <b>${st.acc}% accuracy</b>${st.streak?` and you are on a <b>${st.streak}-day</b> streak`:''}.`:'Solve your first question today and start your <b>study streak</b>.'}</p></div>
-   <div class="hchips">${st.streak?`<span class="hchip c1">${svg('fire')} ${st.streak} Day Streak</span>`:''}${st.acc!=null?`<span class="hchip c3">${svg('target')} ${st.acc}% Accuracy</span>`:''}<span class="hchip c2">${svg('trophy')} ${paid?'Full Access':'Free Plan'}</span></div></div>
+   <div class="hchips">${st.streak?`<span class="hchip c1">${svg('fire')} ${st.streak} Day Streak</span>`:''}${st.acc!=null?`<span class="hchip c3">${svg('target')} ${st.acc}% Accuracy</span>`:''}<span class="hchip c2">${svg('trophy')} ${paid?'Full Access':(isScoped()?'Selected Sections':'Free Plan')}</span></div></div>
   <div class="two wide"><div class="card pad resume">${resume}</div>
    <div class="card pad"><div class="mastery">${mr||'<div class="empty">Subject mastery yahan dikhega, jaise hi tum practice shuru karoge.</div>'}</div><div class="rfoot"><span class="rmeta">${paid?'Unlimited mocks':'1 free mock per subject'}</span><a class="btn dark" href="${mockTo}">Start a Mock ${svg('arrow')}</a></div></div></div>
   ${analyticsBlock(st)}
