@@ -56,7 +56,7 @@ function setApp(html){app.innerHTML=html;}
 const subjName=slug=>((S.subjects||[]).find(s=>s.slug===slug)||{}).name||slug;
 
 function vLogin(){document.getElementById('navbar').classList.add('hidden');document.getElementById('logoutBtn').classList.add('hidden');document.getElementById('userBadge').innerHTML='';
-  setApp(`<div class="card center"><h2>JVVNL Quiz Portal</h2><p class="muted">Login for your personal dashboard, saved progress on every phone, and full question banks.</p></div>
+  setApp(`<div class="card center"><h2>Topper Haveli</h2><p class="muted">Login for your personal dashboard, saved progress on every phone, and full question banks.</p></div>
   <div class="card"><div class="row"><button class="chipbtn on" id="tabIn" type="button">Login</button><button class="chipbtn" id="tabUp" type="button">New account</button></div>
   <div id="nameRow" class="hidden"><label>Your name</label><input id="fName" autocomplete="name"></div>
   <label>Email</label><input id="fEmail" type="email" autocomplete="email">
@@ -93,9 +93,22 @@ async function vHome(){nav('home');await fetchSubjects();
   const paid=isPaid();
   const note=localStorage.getItem('portal_import_note');if(note)localStorage.removeItem('portal_import_note');
   const{data:openMocks}=await sb.from('mock_attempts').select('id,subject_slug,started_at').eq('user_id',S.session.user.id).eq('status','in_progress').order('started_at',{ascending:false}).limit(1);
+  let atts=[];try{atts=await fetchAttempts();}catch(e){atts=[];}
+  const totalA=atts.length,totalC=atts.filter(a=>a.correct).length;
+  const days=[...new Set(atts.map(a=>(a.created_at||'').slice(0,10)))];
+  let streak=0;const today=new Date();for(let i=0;;i++){const d=new Date(today.getTime()-i*86400000).toISOString().slice(0,10);
+    if(days.includes(d)){streak++;}else if(i===0){continue;}else break;}
+  const last=[...atts].filter(a=>a.created_at).sort((x,y)=>(y.created_at>x.created_at?1:-1))[0];
+  const nm=((S.profile&&S.profile.display_name)||(S.profile&&S.profile.display_name)||'').trim().split(/\s+/)[0];
+  const lastSubj=last&&(S.subjects||[]).find(s=>s.slug===last.subject_slug);
+  const lastN=last?atts.filter(a=>a.subject_slug===last.subject_slug).length:0;
   setApp(`${note?`<div class="notice ok">${esc(note)}</div>`:''}
-  ${openMocks&&openMocks.length?`<div class="card"><h3>Paused mock</h3><p class="muted">${esc(subjName(openMocks[0].subject_slug))} - chalu hai</p><a class="btn primary block" href="#/mockrun/${openMocks[0].id}">Resume mock</a></div>`:''}
-  <div class="card"><div class="row"><h2 style="flex:1;margin:0">Subjects</h2>${planChip()}</div><p class="muted">${paid?'Full access: saare questions aur unlimited mocks.':'Free access: har subject me pehle '+S.config.free_question_count+' questions + 1 free mock.'}</p></div>
+  <div class="hello">Namaste${nm?', '+esc(nm):''} &#128075;</div><p class="muted">${totalA?'Aaj bhi thoda practice karte hain.':'Pehla sawal solve karke shuru karo.'}</p>
+  <div class="chips">${streak?`<span class="chip">&#128293; ${streak} din streak</span>`:''}${planChip()}</div>
+  ${openMocks&&openMocks.length?`<div class="card"><div class="lbl">Paused mock</div><h2>${esc(subjName(openMocks[0].subject_slug))}</h2><p class="muted">Mock chalu hai, wahin se aage badho.</p><a class="btn primary block" href="#/mockrun/${openMocks[0].id}">Resume mock</a></div>`:''}
+  ${lastSubj?`<div class="card"><div class="lbl">Wahin se shuru karo</div><h2>${esc(lastSubj.name)}</h2><p class="muted">${lastN} sawal solve kiye &middot; ${fmtAgo(last.created_at)}</p><a class="btn primary block" href="#/practice/${lastSubj.slug}">Continue practice &rarr;</a></div>`:''}
+  <div class="grid2"><div class="stat"><b>${totalA}</b><span>Sawal solve</span></div><div class="stat"><b>${totalA?Math.round(100*totalC/totalA)+'%':'-'}</b><span>Accuracy</span></div></div>
+  <div class="sec">Subjects</div><p class="muted">${paid?'Full access: saare questions aur unlimited mocks.':'Free access: har subject me pehle '+S.config.free_question_count+' questions + 1 free mock.'}</p>
   <div id="subjList">${S.subjects.map(s=>`<div class="subj" data-slug="${s.slug}"><div class="nm"><b>${esc(s.name)}</b><span class="muted">${paid?'Full bank':'Free: '+s.free_question_count+' Q'}</span></div>${paid?'<span class="badge paid">PAID</span>':'<span class="badge free">FREE</span>'}</div>`).join('')}</div>
   ${!paid?`<div class="card center"><h3>${S.profile&&S.profile.is_paid?'Plan khatam ho gaya':'Unlock full access'}</h3><p class="muted">Saare 6,400+ questions, unlimited mocks, weak-topic analysis, rank. ${S.profile&&S.profile.is_paid?'Renew ke liye':'Full access ke liye'} Topper Haveli admin se contact karo.</p></div>`:''}`);
   document.querySelectorAll('.subj').forEach(d=>d.onclick=()=>{location.hash='#/subject/'+d.dataset.slug;});}
@@ -205,7 +218,7 @@ async function vMockRun(id){nav('home');
     if(saveErr){console.warn(saveErr);alert('Result save nahi hua (network/server). Internet check karke dobara Submit dabao - tumhare answers safe hain.');return;}
     renderResult({...m,status:'completed',score,total:list.length},list);}
   function renderResult(mm){const pct=mm.total?Math.round(100*mm.score/mm.total):0;
-    setApp(`<div class="card center"><h2>Mock result</h2>
+    setApp(`<div class="card center"><div class="lbl">Mock result</div><h2 style="font-size:40px;margin:6px 0">${pct}%</h2><p class="muted">${pct>=75?'Bahut badhiya!':pct>=50?'Achha prayas, aur practice karo.':'Weak topics dobara practice karo.'}</p><div class="pbar"><i class="${pct>=75?'g':pct<50?'r':''}" style="width:${pct}%"></i></div>
     <div class="grid2 mt"><div class="stat"><b>${mm.score}/${mm.total}</b><span>Score</span></div><div class="stat"><b>${pct}%</b><span>Accuracy</span></div></div>
     <a class="btn block" href="#/mockreview/${mm.id}">Review answers</a><a class="btn block" href="#/dashboard">Dashboard</a><a class="btn block" href="#/home">Home</a></div>`);}
   if(mockTimer)clearInterval(mockTimer);
@@ -248,11 +261,16 @@ async function vDashboard(){nav('dashboard');await fetchSubjects();
   setApp(`<div class="card"><div class="row"><h2 style="flex:1;margin:0">Dashboard</h2>${planChip()}</div>
     <div class="grid2 mt"><div class="stat"><b>${totalC}/${totalA}</b><span>Correct</span></div><div class="stat"><b>${totalA?Math.round(100*totalC/totalA):0}%</b><span>Accuracy</span></div>
     <div class="stat"><b>${streak}</b><span>Day streak</span></div><div class="stat"><b>${(mocks||[]).length}</b><span>Mocks done</span></div></div></div>
-  <div class="card"><h3>Subject-wise</h3>${S.subjects.filter(s=>per[s.slug]).map(s=>`<div class="row"><span style="flex:1">${esc(s.name)}</span><span class="muted">${per[s.slug].c}/${per[s.slug].n} · ${Math.round(100*per[s.slug].c/per[s.slug].n)}%</span></div>`).join('')||'<p class="muted">Abhi koi practice nahi.</p>'}</div>
+  <div class="card"><h3>Subject-wise</h3>${S.subjects.filter(s=>per[s.slug]).map(s=>{const p=Math.round(100*per[s.slug].c/per[s.slug].n);return `<div style="margin:10px 0"><div class="row"><span style="flex:1;font-weight:600">${esc(s.name)}</span><span class="badge ${p>=75?'free':p>=50?'paid':'warn'}">${p}%</span></div><div class="pbar"><i class="${p>=75?'g':p<50?'r':''}" style="width:${p}%"></i></div><span class="muted">${per[s.slug].c}/${per[s.slug].n} sahi</span></div>`}).join('')||'<p class="muted">Abhi koi practice nahi.</p>'}</div>
   ${paidHtml}
+  ${trendHtml(mocks)}
   <div class="card"><h3>Mock history</h3>${(mocks||[]).map(mk=>`<div class="row"><span style="flex:1">${esc(subjName(mk.subject_slug))}</span><span class="muted">${(mk.completed_at||'').slice(0,10)}</span><a href="#/mockreview/${mk.id}"><span class="badge paid">${mk.score}/${mk.total}</span></a></div>`).join('')||'<p class="muted">Koi mock nahi.</p>'}</div>
   ${!paid?'<div class="card center"><p class="muted">Paid me: weak-topic analysis, rank, unlimited mocks, saare questions.</p></div>':''}`);}
 
+function trendHtml(mocks){const ms=[...(mocks||[])].reverse().filter(m=>m.total);if(ms.length<2)return '';
+  const W=300,H=110,pts=ms.map((m,i)=>[10+i*(280/(ms.length-1)),100-90*m.score/m.total]);
+  const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  return `<div class="card"><h3>Mock score trend</h3><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img" aria-label="Mock score trend"><path d="${d} L${pts[pts.length-1][0]} 105 L10 105Z" fill="var(--acc)" opacity=".12"/><path d="${d}" fill="none" stroke="var(--acc)" stroke-width="3" stroke-linejoin="round"/>${pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="var(--acc)"/>`).join('')}</svg><p class="muted">Last ${ms.length} mocks</p></div>`;}
 function fmtAgo(iso){if(!iso)return 'kabhi nahi';
   const d=(Date.now()-new Date(iso).getTime())/86400000;
   if(d<1/24)return 'abhi abhi'; if(d<1)return Math.floor(d*24)+'h pehle';
