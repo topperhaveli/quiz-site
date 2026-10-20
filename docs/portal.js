@@ -23,7 +23,7 @@ const planChip=()=>{
   if(d<0)return '<span class="badge warn">Plan khatam ho gaya</span>';
   return `<span class="badge ${d<=7?'warn':'paid'}">${d} din bache</span>`;};
 const NOT_PYQ=/original|notes|batch|bank|uploaded|unlabel|not detected|practice question/i;
-const isPYQ=q=>!!q&&(/^pyq/i.test(q.id||'')||(!NOT_PYQ.test(q.source||'')&&(/SSC|UGC|NABARD|JAIIB|ICMAI|RPSC|RSMSSB|PYQ|Recall|\u092a\u093f\u091b\u0932\u0947/i.test(q.source||'')||/(?:^|[^\d])(?:19|20)\d\d(?!\d)/.test(q.source||''))));
+const isPYQ=q=>!!q&&!NOT_PYQ.test(q.source||'')&&/(?:^|[^\d])(?:19|20)\d\d(?!\d)/.test(q.source||'');
 const qType=q=>isPYQ(q)?'PYQ':'Practice';
 const qLabel=q=>{if(!isPYQ(q))return 'Practice';const s=String(q.source||'');if(NOT_PYQ.test(s))return 'PYQ';
   const y=s.match(/(?:^|[^\d])((?:19|20)\d\d)(?!\d)/);if(!y||+y[1]<2000)return 'PYQ';
