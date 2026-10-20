@@ -210,7 +210,7 @@ async function vHome(){nav('home');await fetchSubjects();
     const newReplies=(myD||[]).filter(d=>d.reply&&new Date(d.replied_at||d.created_at).getTime()>seen).length;
     const openN=(myD||[]).filter(d=>d.status!=='answered'&&!d.reply).length;
     annHtml=((anns&&anns.length)?`<div class="card pad annc"><h3 class="h3">${svg('book')} Notice Board</h3>${anns.map(a=>`<div class="annrow"><b>${a.pinned?'<span class="badge warn">PINNED</span> ':''}${esc(a.title)}</b>${a.body?`<p class="muted small" style="margin:3px 0 0;white-space:pre-wrap">${esc(a.body)}</p>`:''}<span class="muted small">${new Date(a.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span></div>`).join('')}</div>`:'')+
-      ((myD&&myD.length)?`<a class="card pad annc" style="display:block;text-decoration:none;color:inherit" href="#/doubts"><b>My Doubts</b> <span class="muted small">${newReplies?newReplies+' new reply':openN?openN+' waiting for answer':'all answered'}</span> <span style="float:right">&rsaquo;</span></a>`:'');
+      '';
   }catch(e){}
   const mr=masteryRows(st,4);
   const mockTo=lastSubj?'#/mocksetup/'+lastSubj.slug:((S.subjects||[])[0]?'#/mocksetup/'+S.subjects[0].slug:'#/home');
@@ -593,6 +593,7 @@ async function vAdmin(openId){nav('admin');
     if(error||!d||!d.profile){setApp('<div class="card center"><p class="muted">Load nahi hua.</p><button class="btn block" id="backB">Back</button></div>');document.getElementById('backB').onclick=render;return;}
     const{data:accRow}=await sb.from('student_access').select('subjects').eq('user_id',detailId).maybeSingle();
     const granted=new Set((accRow&&accRow.subjects)||[]);
+    const{data:scRow}=await sb.from('profiles').select('access_scope').eq('id',detailId).maybeSingle();const scopeNow=(scRow&&scRow.access_scope)||'all';
     const accTokens=[['Rajasthan',[['rajasthan-gk','Rajasthan GK'],['rajasthan-geography','Rajasthan Geography'],['rajasthan-history','Rajasthan History'],['rajasthan-art-culture','Rajasthan Art & Culture']]],['Subjects',(S.subjects||[]).filter(x=>!/^rajasthan-/.test(x.slug)).map(x=>[x.slug,x.name])],['Notes',[['notes','All Study Notes (PDFs)']]]];
     const u=d.profile,acc=d.answers?Math.round(100*d.correct/d.answers):0;
     const nm=s=>subjName(s);
@@ -603,7 +604,7 @@ async function vAdmin(openId){nav('admin');
       <p class="mt"><span class="badge ${planStatus(u).c}">${planStatus(u).t}</span>
         ${u.is_paid&&u.paid_until?`<span class="muted small"> valid till ${new Date(u.paid_until).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>`:''}
         ${u.trial_used?'<span class="badge">trial used</span>':''}</p>
-      <div class="planbox" id="accBox"><p style="margin:0 0 4px"><b>Section access</b></p><p class="muted small" style="margin:0 0 8px">Plan ke upar extra access. Tick kiye hue sections is student ke liye poore khul jaate hain (plan free ho tab bhi). Baaki sab plan ke hisaab se rehta hai.</p>
+      <div class="planbox" id="accBox"><p style="margin:0 0 4px"><b>Plan scope</b></p><p class="muted small" style="margin:0 0 6px">Ye sirf PAID plan wale student par lagta hai. Plan ki validity wahi rehti hai.</p><select id="scopeSel" style="width:100%;margin-bottom:10px"><option value="all"${scopeNow==='all'?' selected':''}>ALL courses (plan me sab kuch)</option><option value="sections"${scopeNow==='sections'?' selected':''}>Sirf neeche tick kiye sections + batch</option></select><button class="chipbtn" id="scopeSave" type="button">Scope save</button> <span class="muted small" id="scopeMsg"></span><p style="margin:12px 0 4px"><b>Section access</b></p><p class="muted small" style="margin:0 0 8px">Tick kiye sections is student ke liye poore khulte hain. Agar student ka PAID plan nahi hai, to ye access permanent hai (koi expiry nahi) jab tak tum untick na karo. PAID plan + &quot;Sirf sections&quot; me ye access plan ki expiry par band ho jaata hai.</p>
         ${accTokens.map(g=>`<p class="muted small" style="margin:8px 0 4px">${g[0]}</p><div class="row" style="flex-wrap:wrap;gap:8px">${g[1].map(t=>`<label class="chipbtn ${granted.has(t[0])?'on':''}" style="cursor:pointer;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" data-acc="${t[0]}" ${granted.has(t[0])?'checked':''} style="width:auto;margin:0"> ${esc(t[1])}</label>`).join('')}</div>`).join('')}
         <div class="row" style="gap:8px;margin-top:10px"><button class="btn primary" id="accSave" type="button">Save access</button><span class="muted small" id="accMsg"></span></div></div>
       <div class="planbox">
@@ -661,6 +662,7 @@ async function vAdmin(openId){nav('admin');
       note(kind==='trial'?'Trial shuru ho gaya.':(days?days+' din ka plan lag gaya.':'Lifetime access de diya.'),true);
       renderDetail();refreshStudents();};
     document.querySelectorAll('[data-plan]').forEach(b=>b.onclick=()=>grant(b.dataset.plan==='life'?null:Number(b.dataset.plan),'plan'));
+    document.getElementById('scopeSave').onclick=async()=>{const m=document.getElementById('scopeMsg');m.textContent='Saving...';const v=document.getElementById('scopeSel').value;const{error}=await sb.rpc('admin_set_scope',{p_id:detailId,p_scope:v});m.textContent=error?('Error: '+error.message):(v==='all'?'Saved: ALL courses':'Saved: sirf selected sections');};
     document.querySelectorAll('[data-acc]').forEach(c=>c.onchange=()=>c.closest('label').classList.toggle('on',c.checked));
     document.getElementById('accSave').onclick=async()=>{const subs=[...document.querySelectorAll('[data-acc]')].filter(c=>c.checked).map(c=>c.dataset.acc);const m=document.getElementById('accMsg');m.textContent='Saving...';
       const{error}=await sb.rpc('admin_set_access',{p_id:detailId,p_subjects:subs});m.textContent=error?('Error: '+error.message):('Saved ('+subs.length+' sections)');};
