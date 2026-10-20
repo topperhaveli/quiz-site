@@ -18,7 +18,7 @@ def build():
  # Normalize the remaining independent sources, retaining their stable legacy references.
  for q in bank['questions']:
   if q['subject']=='computer-applications':q['subject']='computer-awareness';q['subjectName']='Computer Awareness & Applications'
- sources=[('management-accounting-deep-bank.json','management-accounting','Management Accounting','deep-management','jvvnl-deep-study-management-accounting-v1'),('computer-awareness-deep-bank.json','computer-awareness','Computer Awareness & Applications','deep-computer','jvvnl-deep-study-computer-awareness-v1'),('gst-question-bank.json','gst-taxation','GST','deep-gst','jvvnl-deep-study-gst-v1'),('income-tax-deep-bank.js','income-tax','Income Tax','deep-income-tax','jvvnl-deep-study-income-tax-v1')]
+ sources=[('management-accounting-deep-bank.json','management-accounting','Management Accounting','deep-management','jvvnl-deep-study-management-accounting-v1'),('computer-awareness-deep-bank.json','computer-awareness','Computer Awareness & Applications','deep-computer','jvvnl-deep-study-computer-awareness-v1'),('gst-question-bank.json','gst-taxation','GST','deep-gst','jvvnl-deep-study-gst-v1'),('income-tax-deep-bank.js','income-tax','Income Tax','deep-income-tax','jvvnl-deep-study-income-tax-v1'),('rajasthan-gk-deep-bank.json','rajasthan-gk','Rajasthan GK','deep-rajasthan','topperhaveli-rajasthan-gk-deep-v1')]
  for filename,slug,label,prefix,storage in sources:
   text=(DOCS/filename).read_text();rows=json.loads(text) if filename.endswith('.json') else json.JSONDecoder().raw_decode(text.split('=',1)[1].lstrip())[0]
   for q in rows:
@@ -42,6 +42,7 @@ def build():
   if slug=='computer-awareness':section['name']='Computer Awareness & Applications'
   section['count']=sum(q['subject']==slug or slug in q.get('secondarySubjects',[]) for q in bank['questions']);sections.append(section)
  sections.append({'slug':'accounting','name':'Accounting','count':len(accounting)})
+ sections.append({'slug':'rajasthan-gk','name':'Rajasthan GK','count':sum(q['subject']=='rajasthan-gk' for q in bank['questions'])})
  for row in bank['questions']:
   row['contentSignature']=content_signature(row)
  bank['sections']=sections;bank['totalCount']=bank['totalValid']=len(bank['questions']);bank['consolidationVersion']=1
