@@ -44,10 +44,10 @@ async function importLegacy(){if(localStorage.getItem('portal_imported_v1'))retu
     if(ids.length){const{data:qs}=await sb.from('questions').select('id,subject_slug,answer').in('id',ids.slice(0,10000));
       const byId={};(qs||[]).forEach(q=>byId[q.id]=q);
       const rows=ids.filter(id=>byId[id]!==undefined&&Number.isInteger(Number(ans[id]))).map(id=>({user_id:S.session.user.id,question_id:id,subject_slug:byId[id].subject_slug,chosen:Number(ans[id]),correct:Number(ans[id])===byId[id].answer,mode:'practice'}));
-      for(let i=0;i<rows.length;i+=500){await sb.from('attempts').upsert(rows.slice(i,i+500),{onConflict:'user_id,question_id',ignoreDuplicates:true});n+=Math.min(500,rows.length-i);}
+      for(let i=0;i<rows.length;i+=500){const r=await sb.from('attempts').upsert(rows.slice(i,i+500),{onConflict:'user_id,question_id',ignoreDuplicates:true});if(r.error)throw r.error;n+=Math.min(500,rows.length-i);}
       if(n>0)localStorage.setItem('portal_import_note',n+' saved answers imported from the old site.');}
-  }catch(e){console.warn('import failed',e);}
-  localStorage.setItem('portal_imported_v1','1');}
+    localStorage.setItem('portal_imported_v1','1');
+  }catch(e){console.warn('import failed, will retry next login',e);}}
 
 function nav(active){document.getElementById('navbar').classList.remove('hidden');
   document.querySelectorAll('.navbar a').forEach(a=>a.classList.toggle('on',a.dataset.nav===active));
@@ -198,8 +198,11 @@ async function vMockRun(id){nav('home');
     let score=0;const rows=[];
     list.forEach(q=>{const c=st.answers[q.id];if(c!==undefined){const ok=c===q.answer;if(ok)score++;
       rows.push({user_id:S.session.user.id,question_id:q.id,subject_slug:m.subject_slug,chosen:c,correct:ok,mode:'mock'});}});
-    for(let i=0;i<rows.length;i+=500)await sb.from('attempts').upsert(rows.slice(i,i+500),{onConflict:'user_id,question_id'});
-    await sb.from('mock_attempts').update({status:'completed',score,total:list.length,state:st,completed_at:new Date().toISOString()}).eq('id',m.id);
+    let saveErr=null;
+    for(let i=0;i<rows.length;i+=500){const r=await sb.from('attempts').upsert(rows.slice(i,i+500),{onConflict:'user_id,question_id'});if(r.error)saveErr=r.error;}
+    const done=await sb.from('mock_attempts').update({status:'completed',score,total:list.length,state:st,completed_at:new Date().toISOString()}).eq('id',m.id);
+    if(done.error)saveErr=done.error;
+    if(saveErr){console.warn(saveErr);alert('Result save nahi hua (network/server). Internet check karke dobara Submit dabao - tumhare answers safe hain.');return;}
     renderResult({...m,status:'completed',score,total:list.length},list);}
   function renderResult(mm){const pct=mm.total?Math.round(100*mm.score/mm.total):0;
     setApp(`<div class="card center"><h2>Mock result</h2>
