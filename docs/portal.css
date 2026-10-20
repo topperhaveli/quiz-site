@@ -88,3 +88,4 @@ td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
 .btn.primary{box-shadow:0 2px 10px rgba(194,101,42,.25)}
 .chipbtn[data-f]{text-transform:capitalize}
 .chipbtn,.btn{min-height:40px}
+.badge{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
