@@ -5,9 +5,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Topper Haveli</title>
 <link rel="icon" href="./favicon.svg?v=c2de20261020">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500;700&family=Manrope:wght@400;600;700;800&display=swap"><link rel="stylesheet" href="./portal.css?v=sahara1020f">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500;700&family=Manrope:wght@400;600;700;800&display=swap"><link rel="stylesheet" href="./portal.css?v=sahara1020g">
 </head>
 <body>
+<div class="shell">
+<aside class="side" id="side">
+  <a class="sbrand" href="#/home"><span class="slogo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h12a3 3 0 013 3v13H7a3 3 0 01-3-3zM8 8h7"/></svg></span><span><b>Topper Haveli</b><small>JVVNL JA PREP SUITE</small></span></a>
+  <div class="slabel">STUDENT SPACE</div>
+  <a href="#/home" data-nav="home" class="sitem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z"/></svg>Dashboard</a>
+  <a href="#/dashboard" data-nav="dashboard" class="sitem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M6 16l4-5 3 3 5-7"/></svg>Analytics</a>
+  <div class="slabel admin-only hidden" id="sAdminLbl">ADMINISTRATION</div>
+  <a href="#/admin" data-nav="admin" class="sitem hidden" id="navAdmin2"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Admin</a>
+  <div class="sfoot"><span class="sdot"></span>Topper Haveli &middot; v1</div>
+</aside>
+<div class="main">
 <div class="topbar">
   <span class="brand" id="brand">Topper Haveli</span>
   <span class="sp"></span>
@@ -15,12 +26,14 @@
   <button class="chipbtn hidden" id="logoutBtn" type="button">Logout</button>
 </div>
 <div class="wrap" id="app"><div class="card center muted">Loading…</div></div>
+</div>
+</div>
 <nav class="navbar hidden" id="navbar">
-  <a href="#/home" data-nav="home"><i>&#127968;</i>Home</a>
-  <a href="#/dashboard" data-nav="dashboard"><i>&#128200;</i>Progress</a>
-  <a href="#/admin" data-nav="admin" id="navAdmin" class="hidden"><i>&#9881;</i>Admin</a>
+  <a href="#/home" data-nav="home"><i><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z"/></svg></i>Home</a>
+  <a href="#/dashboard" data-nav="dashboard"><i><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M6 16l4-5 3 3 5-7"/></svg></i>Progress</a>
+  <a href="#/admin" data-nav="admin" id="navAdmin" class="hidden"><i><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></i>Admin</a>
 </nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="./portal.js?v=sahara1020f"></script>
+<script src="./portal.js?v=sahara1020g"></script>
 <script src="./site-version.js?v=fe116d768882"></script></body>
 </html>
