@@ -86,3 +86,5 @@ td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
 .card p.muted+.btn.primary{margin-top:12px}
 .navbar{box-shadow:0 -2px 16px rgba(58,48,42,.05)}
 .btn.primary{box-shadow:0 2px 10px rgba(194,101,42,.25)}
+.chipbtn[data-f]{text-transform:capitalize}
+.chipbtn,.btn{min-height:40px}
