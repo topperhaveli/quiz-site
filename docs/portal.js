@@ -36,12 +36,13 @@ async function fetchProfile(){const{data}=await sb.from('profiles').select('*').
   document.getElementById('navAdmin').classList.toggle('hidden',!isAdmin());['navAdmin2','sAdminLbl'].forEach(i=>{const e=document.getElementById(i);if(e)e.classList.toggle('hidden',!isAdmin());});
   const b=document.getElementById('userBadge');
   b.innerHTML=isAdmin()?'<span class="badge warn">ADMIN</span>':(isPaid()?'<span class="badge paid">PAID</span>':'<span class="badge free">FREE</span>');}
-async function fetchSubjects(){if(!S.subjects){const{data}=await sb.from('subjects').select('*').order('sort');S.subjects=data||[];}
-  const{data:cfg}=await sb.from('app_config').select('*');
-  (cfg||[]).forEach(r=>{try{S.config[r.key]=JSON.parse(r.value)}catch(e){S.config[r.key]=r.value}});}
+async function fetchSubjects(){if(S.subjects&&S.cfgDone)return;
+  if(!S._subjP)S._subjP=Promise.all([sb.from('subjects').select('*').order('sort'),sb.from('app_config').select('*')]).then(([a,b])=>{S.subjects=a.data||[];(b.data||[]).forEach(r=>{try{S.config[r.key]=JSON.parse(r.value)}catch(e){S.config[r.key]=r.value}});S.cfgDone=true;S._subjP=null;}).catch(e=>{S._subjP=null;throw e;});
+  await S._subjP;}
 async function fetchQuestions(slug){if(S.qcache[slug])return S.qcache[slug];
   const{data,error}=await sb.from('questions').select('*').eq('subject_slug',slug).order('ord');
   if(error){console.warn(error);return[];} S.qcache[slug]=data||[]; return S.qcache[slug];}
+async function fetchAttemptsLite(){const{data}=await sb.from('attempts').select('subject_slug,correct,created_at').eq('user_id',S.session.user.id).limit(10000);return data||[];}
 async function fetchAttempts(){const{data}=await sb.from('attempts').select('question_id,subject_slug,chosen,correct,mode,created_at').eq('user_id',S.session.user.id);
   return data||[];}
 
@@ -114,13 +115,14 @@ const IC={
 const svg=(k,c)=>`<svg class="ic ${c||''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[k]}</svg>`;
 const tier=p=>p>=90?['Mastered','t-good','g']:p>=80?['Proficient','t-acc','']:p>=70?['Needs Review','t-mid','m']:['Action Required','t-bad','r'];
 async function loadStats(){
-  const atts=await fetchAttempts();
+  const mP=sb.from('mock_attempts').select('id,subject_slug,score,total,completed_at,status').eq('user_id',S.session.user.id).eq('status','completed').order('completed_at',{ascending:false}).limit(20);
+  const atts=await fetchAttemptsLite();
   const per={};atts.forEach(a=>{per[a.subject_slug]=per[a.subject_slug]||{n:0,c:0};per[a.subject_slug].n++;if(a.correct)per[a.subject_slug].c++;});
   const totalA=atts.length,totalC=atts.filter(a=>a.correct).length;
   const days=[...new Set(atts.map(a=>(a.created_at||'').slice(0,10)))];
   let streak=0;const today=new Date();for(let i=0;;i++){const d=new Date(today.getTime()-i*86400000).toISOString().slice(0,10);
     if(days.includes(d)){streak++;}else if(i===0){continue;}else break;}
-  const{data:mocks}=await sb.from('mock_attempts').select('id,subject_slug,score,total,completed_at,status').eq('user_id',S.session.user.id).eq('status','completed').order('completed_at',{ascending:false}).limit(20);
+  const{data:mocks}=await mP;
   const last=[...atts].filter(a=>a.created_at).sort((x,y)=>(y.created_at>x.created_at?1:-1))[0];
   const ms=(mocks||[]).filter(m=>m.total);
   const avg=ms.length?Math.round(ms.reduce((a,m)=>a+100*m.score/m.total,0)/ms.length):null;
@@ -150,8 +152,9 @@ function mocksList(mocks){return (mocks||[]).slice(0,4).map(mk=>{const p=mk.tota
 async function vHome(){nav('home');await fetchSubjects();
   const paid=isPaid();
   const note=localStorage.getItem('portal_import_note');if(note)localStorage.removeItem('portal_import_note');
-  const{data:openMocks}=await sb.from('mock_attempts').select('id,subject_slug,started_at,state,config').eq('user_id',S.session.user.id).eq('status','in_progress').order('started_at',{ascending:false}).limit(1);
+  const omP=sb.from('mock_attempts').select('id,subject_slug,started_at,state,config').eq('user_id',S.session.user.id).eq('status','in_progress').order('started_at',{ascending:false}).limit(1);
   let st;try{st=await loadStats();}catch(e){st={atts:[],per:{},totalA:0,totalC:0,acc:null,streak:0,mocks:[],last:null,avg:null};}
+  const{data:openMocks}=await omP;
   const nm=((S.profile&&S.profile.display_name)||'').trim().split(/\s+/)[0];
   const lastSubj=st.last&&(S.subjects||[]).find(s=>s.slug===st.last.subject_slug);
   const om=openMocks&&openMocks[0];
@@ -576,9 +579,7 @@ async function route(){const h=location.hash||'#/home';
   const{data}=await sb.auth.getSession();S.session=data.session;
   if(S.recovery){vReset();return;}
   if(!S.session){vLogin();return;}
-  if(!S.profile)await fetchProfile();
-  if(!S.subjects)await fetchSubjects();
-  await importLegacy();
+  await Promise.all([S.profile?0:fetchProfile(),fetchSubjects(),importLegacy()]);
   const parts=h.split('/');const view=parts[1],arg=parts[2];
   if(view==='home')return vHome();
   if(view==='subject')return vSubject(arg);
