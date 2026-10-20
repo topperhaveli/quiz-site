@@ -6,6 +6,7 @@ ROOT=pathlib.Path(__file__).resolve().parents[1];DOCS=ROOT/'docs'
 def inline(path,marker):return json.JSONDecoder().raw_decode(path.read_text().split(marker,1)[1].lstrip())[0]
 def build():
  original=inline(DOCS/'question-bank.js','=');bank=copy.deepcopy(original)
+ bank['questions']=[q for q in bank['questions'] if q.get('id')!='pyq-637']  # duplicate of deep-management-MA361
  cost_slugs={'cost-accounting-pyq','advanced-cost-accounting','cost-accounting-practice'};audit_slugs={'auditing','cost-management-audit'}
  for q in bank['questions']:
   old_subject=q['subject'];members={old_subject,*q.get('secondarySubjects',[])};q['legacySubject']=old_subject
@@ -18,7 +19,7 @@ def build():
  # Normalize the remaining independent sources, retaining their stable legacy references.
  for q in bank['questions']:
   if q['subject']=='computer-applications':q['subject']='computer-awareness';q['subjectName']='Computer Awareness & Applications'
- sources=[('management-accounting-deep-bank.json','management-accounting','Management Accounting','deep-management','jvvnl-deep-study-management-accounting-v1'),('computer-awareness-deep-bank.json','computer-awareness','Computer Awareness & Applications','deep-computer','jvvnl-deep-study-computer-awareness-v1'),('gst-question-bank.json','gst-taxation','GST','deep-gst','jvvnl-deep-study-gst-v1'),('income-tax-deep-bank.js','income-tax','Income Tax','deep-income-tax','jvvnl-deep-study-income-tax-v1'),('rajasthan-gk-deep-bank.json','rajasthan-gk','Rajasthan GK','deep-rajasthan','topperhaveli-rajasthan-gk-deep-v1')]
+ sources=[('management-accounting-deep-bank.json','management-accounting','Management Accounting','deep-management','jvvnl-deep-study-management-accounting-v1'),('computer-awareness-deep-bank.json','computer-awareness','Computer Awareness & Applications','deep-computer','jvvnl-deep-study-computer-awareness-v1'),('gst-question-bank.json','gst-taxation','GST','deep-gst','jvvnl-deep-study-gst-v1'),('income-tax-deep-bank.js','income-tax','Income Tax','deep-income-tax','jvvnl-deep-study-income-tax-v1'),('rajasthan-gk-deep-bank.json','rajasthan-gk','Rajasthan GK','deep-rajasthan','topperhaveli-rajasthan-gk-deep-v1'),('rajasthan-gk-pyq-bank.json','rajasthan-gk','Rajasthan GK','pyq-rajasthan','topperhaveli-rajasthan-gk-pyq-v1')]
  for filename,slug,label,prefix,storage in sources:
   text=(DOCS/filename).read_text();rows=json.loads(text) if filename.endswith('.json') else json.JSONDecoder().raw_decode(text.split('=',1)[1].lstrip())[0]
   for q in rows:
