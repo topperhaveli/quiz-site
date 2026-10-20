@@ -64,7 +64,8 @@ function nav(active){document.getElementById('navbar').classList.remove('hidden'
 function setApp(html){app.innerHTML=html;}
 async function fetchNotes(){if(S.notes)return S.notes;const{data}=await sb.from('notes').select('id,title,subject_slug,kind,ch,sort,size_bytes,path,is_free').order('sort');S.notes=data||[];return S.notes;}
 const fmtSize=b=>b>=1048576?(b/1048576).toFixed(1)+' MB':Math.max(1,Math.round(b/1024))+' KB';
-const canNote=n=>n.is_free||isPaid();
+const hasFull=slug=>isPaid()||(S.access||[]).includes(slug);
+const canNote=n=>n.is_free||isPaid()||(S.access||[]).includes('notes');
 const noteRow=n=>{const ok=canNote(n);return `<div class="srow nrow" data-id="${n.id}"><span class="itile t-acc">${svg(ok?'file':'lock')}</span><div class="nm"><b>${esc(n.title)}</b><span class="sub">PDF &middot; ${fmtSize(n.size_bytes)}${n.kind==='volume'?' &middot; Full volume':''}</span></div><span class="tpill ${n.is_free?'t-good':'t-acc'}">${n.is_free?'FREE':'PAID'}</span>${ok?`<button class="btn primary sm nopen" type="button" data-id="${n.id}">Open</button>`:`<span class="btn sm" aria-disabled="true">Locked</span>`}${isAdmin()?`<button class="btn sm nflip" type="button" data-id="${n.id}">${n.is_free?'Make paid':'Make free'}</button>`:''}</div>`;};
 async function openNote(id,dl){const n=(S.notes||[]).find(x=>x.id==id);if(!n)return;if(!canNote(n)){alert('Yeh note paid students ke liye hai. Full access ke liye Topper Haveli admin se contact karo.');return;}
   const w=dl?null:window.open('','_blank');
@@ -208,7 +209,7 @@ async function vHome(){nav('home');await fetchSubjects();
     box.innerHTML=`<div class="sechead"><h2 class="h2s">${svg('book','o')} Study Notes</h2><a class="sub" href="#/notes">View all ${all.length} &rsaquo;</a></div>${pick.map(noteRow).join('')}`;bindNotes(box);}).catch(()=>{});}
 
 async function vSubject(slug){nav('home');await fetchSubjects();
-  const[qs,allN]=await Promise.all([fetchQuestions(slug),fetchNotes().catch(()=>[])]);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;const paid=isPaid();
+  const[qs,allN]=await Promise.all([fetchQuestions(slug),fetchNotes().catch(()=>[])]);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;const paid=hasFull(slug);
   const nN=allN.filter(n=>n.subject_slug===slug).length;
   const card=(ic,t,sub,cnt,href,btn,dis)=>`<div class="card pad scrd ${dis?'dis':''}"><span class="itile t-acc">${svg(ic)}</span><h3 class="h3">${t}</h3><p class="sub">${sub}</p>${cnt?`<div class="cnt">${cnt}<small> questions</small></div>`:''}${dis?`<span class="btn" aria-disabled="true">${btn}</span>`:`<a class="btn primary" href="${href}">${btn} ${svg('arrow')}</a>`}</div>`;
   setApp(`<div class="crumb"><a href="#/home">Dashboard</a> &rsaquo; ${esc(subjName(slug))}</div><h1 class="h1 sm">${esc(subjName(slug))}</h1><p class="lead">Choose how you want to study. MCQ, previous-year questions and notes are kept separate.</p>
@@ -256,7 +257,7 @@ async function vPractice(slug,initSrc){nav('home');
   render();}
 
 async function vMockSetup(slug){nav('home');await fetchSubjects();
-  const paid=isPaid();
+  const paid=hasFull(slug);
   const{count}=await sb.from('mock_attempts').select('id',{count:'exact',head:true}).eq('user_id',S.session.user.id).eq('subject_slug',slug);
   const freeLeft=S.config.free_mock_per_subject?(count<1):false;
   if(!paid&&!freeLeft){setApp(`<div class="card center"><h3>Free mock used</h3><p class="muted">${esc(subjName(slug))} ka free mock ho chuka. Paid me unlimited mocks milte hain.</p><a class="btn block" href="#/subject/${slug}">Back</a></div>`);return;}
@@ -507,6 +508,9 @@ async function vAdmin(){nav('admin');
     setApp('<div class="card center muted">Student details load ho rahe hain…</div>');
     const{data:d,error}=await sb.rpc('admin_student_detail',{p_id:detailId});
     if(error||!d||!d.profile){setApp('<div class="card center"><p class="muted">Load nahi hua.</p><button class="btn block" id="backB">Back</button></div>');document.getElementById('backB').onclick=render;return;}
+    const{data:accRow}=await sb.from('student_access').select('subjects').eq('user_id',detailId).maybeSingle();
+    const granted=new Set((accRow&&accRow.subjects)||[]);
+    const accTokens=[['Rajasthan',[['rajasthan-gk','Rajasthan GK'],['rajasthan-geography','Rajasthan Geography'],['rajasthan-history','Rajasthan History'],['rajasthan-art-culture','Rajasthan Art & Culture']]],['Subjects',(S.subjects||[]).map(x=>[x.slug,x.name])],['Notes',[['notes','All Study Notes (PDFs)']]]];
     const u=d.profile,acc=d.answers?Math.round(100*d.correct/d.answers):0;
     const nm=s=>subjName(s);
     setApp(`
@@ -516,6 +520,9 @@ async function vAdmin(){nav('admin');
       <p class="mt"><span class="badge ${planStatus(u).c}">${planStatus(u).t}</span>
         ${u.is_paid&&u.paid_until?`<span class="muted small"> valid till ${new Date(u.paid_until).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>`:''}
         ${u.trial_used?'<span class="badge">trial used</span>':''}</p>
+      <div class="planbox" id="accBox"><p style="margin:0 0 4px"><b>Section access</b></p><p class="muted small" style="margin:0 0 8px">Plan ke upar extra access. Tick kiye hue sections is student ke liye poore khul jaate hain (plan free ho tab bhi). Baaki sab plan ke hisaab se rehta hai.</p>
+        ${accTokens.map(g=>`<p class="muted small" style="margin:8px 0 4px">${g[0]}</p><div class="row" style="flex-wrap:wrap;gap:8px">${g[1].map(t=>`<label class="chipbtn ${granted.has(t[0])?'on':''}" style="cursor:pointer;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" data-acc="${t[0]}" ${granted.has(t[0])?'checked':''} style="width:auto;margin:0"> ${esc(t[1])}</label>`).join('')}</div>`).join('')}
+        <div class="row" style="gap:8px;margin-top:10px"><button class="btn primary" id="accSave" type="button">Save access</button><span class="muted small" id="accMsg"></span></div></div>
       <div class="planbox">
         <p class="muted small" style="margin:0 0 6px">Plan do (ek tap):</p>
         <div class="row" style="flex-wrap:wrap;gap:8px">
@@ -569,6 +576,9 @@ async function vAdmin(){nav('admin');
       note(kind==='trial'?'Trial shuru ho gaya.':(days?days+' din ka plan lag gaya.':'Lifetime access de diya.'),true);
       renderDetail();refreshStudents();};
     document.querySelectorAll('[data-plan]').forEach(b=>b.onclick=()=>grant(b.dataset.plan==='life'?null:Number(b.dataset.plan),'plan'));
+    document.querySelectorAll('[data-acc]').forEach(c=>c.onchange=()=>c.closest('label').classList.toggle('on',c.checked));
+    document.getElementById('accSave').onclick=async()=>{const subs=[...document.querySelectorAll('[data-acc]')].filter(c=>c.checked).map(c=>c.dataset.acc);const m=document.getElementById('accMsg');m.textContent='Saving...';
+      const{error}=await sb.rpc('admin_set_access',{p_id:detailId,p_subjects:subs});m.textContent=error?('Error: '+error.message):('Saved ('+subs.length+' sections)');};
     document.querySelectorAll('[data-trial]').forEach(b=>b.onclick=()=>grant(Number(b.dataset.trial),'trial'));
     document.getElementById('pCustomGo').onclick=()=>{
       const n=Number(document.getElementById('pCustom').value);
@@ -606,7 +616,7 @@ async function route(){const h=location.hash||'#/home';
   const{data}=await sb.auth.getSession();S.session=data.session;
   if(S.recovery){vReset();return;}
   if(!S.session){vLogin();return;}
-  await Promise.all([S.profile?0:fetchProfile(),fetchSubjects(),importLegacy()]);
+  await Promise.all([S.profile?0:fetchProfile(),fetchSubjects(),importLegacy(),S.accessOk?0:sb.rpc('my_access').then(r=>{S.access=Array.isArray(r.data)?r.data:[];S.accessOk=!r.error;}).catch(()=>{S.access=[];})]);
   const parts=h.split('/');const view=parts[1],arg=parts[2];
   if(view==='home')return vHome();
   if(view==='subject')return vSubject(arg);
@@ -618,7 +628,7 @@ async function route(){const h=location.hash||'#/home';
   if(view==='dashboard')return vDashboard();
   if(view==='admin')return vAdmin();
   return vHome();}
-document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut();S.profile=null;S.qcache={};S.subjects=null;location.hash='#/login';route();};
+document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut();S.profile=null;S.qcache={};S.access=null;S.accessOk=false;S.notes=null;S.subjects=null;location.hash='#/login';route();};
 window.addEventListener('hashchange',route);
 function vReset(){document.getElementById('navbar').classList.add('hidden');document.getElementById('logoutBtn').classList.add('hidden');
   setApp(`<div class="card center"><h2>Naya password set karo</h2></div>
@@ -632,7 +642,7 @@ function vReset(){document.getElementById('navbar').classList.add('hidden');docu
     msg.classList.remove('hidden');
     if(error){msg.textContent=error.message;return;}
     msg.textContent='Password set ho gaya. Ab login karo.';msg.classList.add('ok');
-    S.recovery=false;await sb.auth.signOut();S.profile=null;S.qcache={};setTimeout(()=>{location.hash='#/login';route();},1200);};}
+    S.recovery=false;await sb.auth.signOut();S.profile=null;S.qcache={};S.access=null;S.accessOk=false;S.notes=null;setTimeout(()=>{location.hash='#/login';route();},1200);};}
 sb.auth.onAuthStateChange((e,s)=>{if(e==='SIGNED_IN'||e==='SIGNED_OUT')S.qcache={};S.session=s;if(e==='PASSWORD_RECOVERY'){S.recovery=true;vReset();}});
 route();
 })();
