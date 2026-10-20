@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 """Prepare consolidated Costing/Auditing data without touching source banks."""
+# PUBLIC PUBLISH DISABLED 2026-10-20: static public question banks were removed from the site.
+# All public content now lives behind the access-controlled portal.
+# Private extraction/handoff builds only: set RAJA_PRIVATE_BUILD=1 and write output outside docs/.
+import os as _os, sys as _sys
+if _os.environ.get("RAJA_PRIVATE_BUILD") != "1":
+    _sys.exit("disabled: public bank generation removed. Set RAJA_PRIVATE_BUILD=1 for private extraction builds only.")
 import copy,json,pathlib
 from import_notes_mcq import content_signature
 ROOT=pathlib.Path(__file__).resolve().parents[1];DOCS=ROOT/'docs'
