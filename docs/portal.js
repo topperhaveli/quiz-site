@@ -33,7 +33,7 @@ const qLabel=q=>{if(!isPYQ(q))return 'Practice';const s=String(q.source||'');if(
 const isAdmin=()=>!!(S.profile&&S.profile.is_admin);
 
 async function fetchProfile(){const{data}=await sb.from('profiles').select('*').eq('id',S.session.user.id).single();S.profile=data;
-  document.getElementById('navAdmin').classList.toggle('hidden',!isAdmin());
+  document.getElementById('navAdmin').classList.toggle('hidden',!isAdmin());['navAdmin2','sAdminLbl'].forEach(i=>{const e=document.getElementById(i);if(e)e.classList.toggle('hidden',!isAdmin());});
   const b=document.getElementById('userBadge');
   b.innerHTML=isAdmin()?'<span class="badge warn">ADMIN</span>':(isPaid()?'<span class="badge paid">PAID</span>':'<span class="badge free">FREE</span>');}
 async function fetchSubjects(){if(!S.subjects){const{data}=await sb.from('subjects').select('*').order('sort');S.subjects=data||[];}
@@ -58,12 +58,12 @@ async function importLegacy(){if(localStorage.getItem('portal_imported_v1'))retu
   }catch(e){console.warn('import failed, will retry next login',e);}}
 
 function nav(active){document.getElementById('navbar').classList.remove('hidden');
-  document.querySelectorAll('.navbar a').forEach(a=>a.classList.toggle('on',a.dataset.nav===active));
+  document.body.classList.add('authed');document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('on',a.dataset.nav===active));
   document.getElementById('logoutBtn').classList.remove('hidden');}
 function setApp(html){app.innerHTML=html;}
 const subjName=slug=>((S.subjects||[]).find(s=>s.slug===slug)||{}).name||slug;
 
-function vLogin(){document.getElementById('navbar').classList.add('hidden');document.getElementById('logoutBtn').classList.add('hidden');document.getElementById('userBadge').innerHTML='';
+function vLogin(){document.body.classList.remove('authed');document.getElementById('navbar').classList.add('hidden');document.getElementById('logoutBtn').classList.add('hidden');document.getElementById('userBadge').innerHTML='';
   setApp(`<div class="card center"><h2>Topper Haveli</h2><p class="muted">Login for your personal dashboard, saved progress on every phone, and full question banks.</p></div>
   <div class="card"><div class="row"><button class="chipbtn on" id="tabIn" type="button">Login</button><button class="chipbtn" id="tabUp" type="button">New account</button></div>
   <div id="nameRow" class="hidden"><label>Your name</label><input id="fName" autocomplete="name"></div>
@@ -97,36 +97,97 @@ function vLogin(){document.getElementById('navbar').classList.add('hidden');docu
     }catch(e){const m0=String(e.message||''),mm=/invalid login/i.test(m0)?'Email ya password galat hai.':/already registered/i.test(m0)?'Ye email pehle se registered hai. Login karo.':/email not confirmed/i.test(m0)?'Pehle email ka confirmation link kholo.':/rate limit|too many/i.test(m0)?'Bahut try ho gaye. Thodi der baad dobara karo.':/network|fetch/i.test(m0)?'Internet check karo aur dobara try karo.':(m0||'Login nahi hua. Dobara try karo.');msg.textContent=mm;msg.classList.remove('hidden','ok');}
     document.getElementById('goBtn').disabled=false;};}
 
-async function vHome(){nav('home');await fetchSubjects();
-  const paid=isPaid();
-  const note=localStorage.getItem('portal_import_note');if(note)localStorage.removeItem('portal_import_note');
-  const{data:openMocks}=await sb.from('mock_attempts').select('id,subject_slug,started_at').eq('user_id',S.session.user.id).eq('status','in_progress').order('started_at',{ascending:false}).limit(1);
-  let atts=[];try{atts=await fetchAttempts();}catch(e){atts=[];}
+const IC={
+ hour:'<path d="M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9"/>',
+ check:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.5l2.5 2.5 5-5.5"/>',
+ chart:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 16v-4M12 16V8M16 16v-6"/>',
+ target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>',
+ book:'<path d="M4 5h6a2 2 0 012 2v12a2 2 0 00-2-2H4zM20 5h-6a2 2 0 00-2 2v12a2 2 0 012-2h6z"/>',
+ file:'<path d="M7 3h7l5 5v13H7zM14 3v5h5"/>',
+ clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/>',
+ arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+ fire:'<path d="M12 3c1 4 5 5 5 10a5 5 0 01-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-6 1-9z"/>',
+ grad:'<path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2.5 9 2.5 12 0v-5"/>',
+ trophy:'<path d="M8 4h8v5a4 4 0 01-8 0zM8 6H4v1a3 3 0 003 3M16 6h4v1a3 3 0 01-3 3M12 13v4M9 20h6"/>',
+ lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
+ list:'<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>'};
+const svg=(k,c)=>`<svg class="ic ${c||''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[k]}</svg>`;
+const tier=p=>p>=90?['Mastered','t-good','g']:p>=80?['Proficient','t-acc','']:p>=70?['Needs Review','t-mid','m']:['Action Required','t-bad','r'];
+async function loadStats(){
+  const atts=await fetchAttempts();
+  const per={};atts.forEach(a=>{per[a.subject_slug]=per[a.subject_slug]||{n:0,c:0};per[a.subject_slug].n++;if(a.correct)per[a.subject_slug].c++;});
   const totalA=atts.length,totalC=atts.filter(a=>a.correct).length;
   const days=[...new Set(atts.map(a=>(a.created_at||'').slice(0,10)))];
   let streak=0;const today=new Date();for(let i=0;;i++){const d=new Date(today.getTime()-i*86400000).toISOString().slice(0,10);
     if(days.includes(d)){streak++;}else if(i===0){continue;}else break;}
+  const{data:mocks}=await sb.from('mock_attempts').select('id,subject_slug,score,total,completed_at,status').eq('user_id',S.session.user.id).eq('status','completed').order('completed_at',{ascending:false}).limit(20);
   const last=[...atts].filter(a=>a.created_at).sort((x,y)=>(y.created_at>x.created_at?1:-1))[0];
-  const nm=((S.profile&&S.profile.display_name)||(S.profile&&S.profile.display_name)||'').trim().split(/\s+/)[0];
-  const lastSubj=last&&(S.subjects||[]).find(s=>s.slug===last.subject_slug);
-  const lastN=last?atts.filter(a=>a.subject_slug===last.subject_slug).length:0;
+  const ms=(mocks||[]).filter(m=>m.total);
+  const avg=ms.length?Math.round(ms.reduce((a,m)=>a+100*m.score/m.total,0)/ms.length):null;
+  return{atts,per,totalA,totalC,acc:totalA?Math.round(100*totalC/totalA):null,streak,mocks:mocks||[],last,avg};}
+function masteryRows(st,limit){const rows=(S.subjects||[]).filter(s=>st.per[s.slug]).map(s=>({s,p:Math.round(100*st.per[s.slug].c/st.per[s.slug].n),n:st.per[s.slug].n})).sort((a,b)=>b.n-a.n).slice(0,limit||99);
+  return rows.map(r=>{const t=tier(r.p);return `<div class="mrow"><div class="mtop"><span class="mname">${esc(r.s.name)}</span><span class="tpill ${t[1]}">${t[0]}</span><b>${r.p}%</b></div><div class="pbar"><i class="${t[2]}" style="width:${r.p}%"></i></div></div>`}).join('');}
+function trajectory(mocks){const ms=[...(mocks||[])].reverse().filter(m=>m.total).slice(-8);
+  if(ms.length<2)return `<div class="empty">${ms.length?'Ek aur mock do, phir trend line dikhegi.':'Mock tests do, score trend yahan dikhega.'}</div>`;
+  const W=520,H=230,L=40,R=16,T=18,B=30,n=ms.length,x=i=>L+i*(W-L-R)/(n-1),y=v=>T+(H-T-B)*(1-v/100);
+  const pts=ms.map((m,i)=>[x(i),y(100*m.score/m.total),Math.round(100*m.score/m.total)]);
+  const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const grid=[100,70,40].map(v=>`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="#e1d9d0" stroke-dasharray="${v==100?'0':'3 4'}"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="#78706a">${v}%</text>`).join('');
+  const mx=pts.reduce((a,p)=>p[2]>a[2]?p:a,pts[0]);
+  return `<svg viewBox="0 0 ${W} ${H}" class="traj" role="img" aria-label="Mock score trend"><defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c2652a" stop-opacity=".22"/><stop offset="1" stop-color="#c2652a" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${d} L${pts[n-1][0]} ${H-B} L${pts[0][0]} ${H-B}Z" fill="url(#tg)"/><path d="${d}" fill="none" stroke="#c2652a" stroke-width="2.5" stroke-linejoin="round"/>${pts.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="#fff" stroke="#c2652a" stroke-width="2"/><text x="${p[0]}" y="${H-10}" text-anchor="middle" font-size="11" fill="${i==n-1?'#c2652a':'#78706a'}" font-weight="${i==n-1?700:500}">M${i+1}</text>`).join('')}<g transform="translate(${Math.min(Math.max(mx[0],40),W-50)},${mx[1]-26})"><rect x="-30" y="-12" width="60" height="20" rx="6" fill="#c2652a"/><text y="2" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">${mx[2]}% best</text></g></svg>`;}
+function analyticsBlock(st){const nm=st.mocks.length;
+  return `<div class="sechead"><div><h2 class="h2">Performance &amp; Progress Analytics</h2><p class="sub">Real numbers from your practice answers and mock tests.</p></div></div>
+  <div class="stats4">
+   <div class="scard"><div class="slab">QUESTIONS SOLVED<span class="itile t-acc">${svg('hour')}</span></div><div class="sval">${st.totalA}<small>Q</small></div><div class="ssub">${st.totalC} correct</div></div>
+   <div class="scard"><div class="slab">MOCK TESTS DONE<span class="itile t-mid">${svg('check')}</span></div><div class="sval">${nm}<small>mocks</small></div><div class="ssub">${nm?'Last: '+esc(subjName(st.mocks[0].subject_slug)):'Take your first mock'}</div></div>
+   <div class="scard"><div class="slab">AVERAGE MOCK SCORE<span class="itile t-gold">${svg('chart')}</span></div><div class="sval">${st.avg!=null?st.avg+'%':'-'}</div><div class="ssub ${st.avg>=70?'good':''}">${st.avg!=null?(st.avg>=70?'Above 70% mark':'Aim for 70%+'):'No mock yet'}</div></div>
+   <div class="scard"><div class="slab">CURRENT ACCURACY<span class="itile t-bad">${svg('target')}</span></div><div class="sval">${st.acc!=null?st.acc+'%':'-'}</div><div class="ssub">${st.streak?st.streak+'-day streak':'Start a streak today'}</div></div>
+  </div>
+  <div class="two"><div class="card pad"><h3 class="h3">Score Trajectory</h3><p class="sub">Last ${Math.min(8,st.mocks.length)||8} mock tests</p>${trajectory(st.mocks)}</div>
+   <div class="card pad"><h3 class="h3">Subject-Wise Accuracy &amp; Mastery</h3><p class="sub">From your practice answers</p>${masteryRows(st)||'<div class="empty">Practice karo, subject-wise accuracy yahan dikhegi.</div>'}</div></div>`;}
+function mocksList(mocks){return (mocks||[]).slice(0,4).map(mk=>{const p=mk.total?Math.round(100*mk.score/mk.total):0,t=tier(p);return `<a class="mcard b-${t[2]||'o'}" href="#/mockreview/${mk.id}"><div class="mtop"><b>${esc(subjName(mk.subject_slug))}</b><span class="tpill ${t[1]}">${mk.score}/${mk.total}</span></div><div class="sub">${(mk.completed_at||'').slice(0,10)} &middot; ${p}% &middot; View review &rsaquo;</div></a>`}).join('')||'<div class="empty">Abhi koi mock complete nahi hua.</div>';}
+
+async function vHome(){nav('home');await fetchSubjects();
+  const paid=isPaid();
+  const note=localStorage.getItem('portal_import_note');if(note)localStorage.removeItem('portal_import_note');
+  const{data:openMocks}=await sb.from('mock_attempts').select('id,subject_slug,started_at,state,config').eq('user_id',S.session.user.id).eq('status','in_progress').order('started_at',{ascending:false}).limit(1);
+  let st;try{st=await loadStats();}catch(e){st={atts:[],per:{},totalA:0,totalC:0,acc:null,streak:0,mocks:[],last:null,avg:null};}
+  const nm=((S.profile&&S.profile.display_name)||'').trim().split(/\s+/)[0];
+  const lastSubj=st.last&&(S.subjects||[]).find(s=>s.slug===st.last.subject_slug);
+  const om=openMocks&&openMocks[0];
+  let resume;
+  if(om){const tot=((om.config||{}).question_ids||[]).length,ans=Object.keys(((om.state||{}).answers)||{}).length;
+    resume=`<div class="pillbtn">RESUME PAUSED MOCK</div><h2 class="rtitle">${esc(subjName(om.subject_slug))}</h2><p class="rsub">Mock chalu hai - wahin se aage badho.</p><div class="rbar"><span>Mock Progress</span><b>${tot?Math.round(100*ans/tot):0}%</b></div><div class="pbar"><i style="width:${tot?Math.round(100*ans/tot):0}%"></i></div><div class="rfoot"><span class="rmeta">${svg('check','g')} ${ans} of ${tot} answered</span><a class="btn primary" href="#/mockrun/${om.id}">Resume Mock ${svg('arrow')}</a></div>`;}
+  else if(lastSubj){const n=(st.per[lastSubj.slug]||{}).n||0,avail=Math.max(n,(S.qcache[lastSubj.slug]||[]).length||(paid?0:lastSubj.free_question_count)||n);
+    resume=`<div class="pillbtn">RESUME LAST PRACTICE</div><span class="rtime">${svg('clock')} ${fmtAgo(st.last.created_at)}</span><h2 class="rtitle">${esc(lastSubj.name)}</h2><p class="rsub">${n} questions solved in this subject.</p><div class="rbar"><span>Subject Progress</span><b>${avail?Math.round(100*n/avail):0}%</b></div><div class="pbar"><i style="width:${avail?Math.min(100,Math.round(100*n/avail)):0}%"></i></div><div class="rfoot"><span class="rmeta">${svg('check','g')} ${n} of ${avail||'-'} questions done</span><a class="btn primary" href="#/subject/${lastSubj.slug}">Continue Learning ${svg('arrow')}</a></div>`;}
+  else{const f=(S.subjects||[])[0];
+    resume=`<div class="pillbtn">START HERE</div><h2 class="rtitle">${f?esc(f.name):'Pehla subject chuno'}</h2><p class="rsub">Pehla sawal solve karke apni journey shuru karo.</p><div class="rfoot"><span class="rmeta">${svg('book','g')} ${(S.subjects||[]).length} subjects available</span>${f?`<a class="btn primary" href="#/subject/${f.slug}">Start Learning ${svg('arrow')}</a>`:''}</div>`;}
+  const mr=masteryRows(st,4);
+  const mockTo=lastSubj?'#/mocksetup/'+lastSubj.slug:((S.subjects||[])[0]?'#/mocksetup/'+S.subjects[0].slug:'#/home');
   setApp(`${note?`<div class="notice ok">${esc(note)}</div>`:''}
-  <div class="hello">Namaste${nm?', '+esc(nm):''} &#128075;</div><p class="muted">${totalA?'Aaj bhi thoda practice karte hain.':'Pehla sawal solve karke shuru karo.'}</p>
-  <div class="chips">${streak?`<span class="chip">&#128293; ${streak} din streak</span>`:''}${planChip()}</div>
-  ${openMocks&&openMocks.length?`<div class="card"><div class="lbl">Paused mock</div><h2>${esc(subjName(openMocks[0].subject_slug))}</h2><p class="muted">Mock chalu hai, wahin se aage badho.</p><a class="btn primary block" href="#/mockrun/${openMocks[0].id}">Resume mock</a></div>`:''}
-  ${lastSubj?`<div class="card"><div class="lbl">Wahin se shuru karo</div><h2>${esc(lastSubj.name)}</h2><p class="muted">${lastN} sawal solve kiye &middot; ${fmtAgo(last.created_at)}</p><a class="btn primary block" href="#/practice/${lastSubj.slug}">Continue practice &rarr;</a></div>`:''}
-  <div class="grid2"><div class="stat"><b>${totalA}</b><span>Sawal solve</span></div><div class="stat"><b>${totalA?Math.round(100*totalC/totalA)+'%':'-'}</b><span>Accuracy</span></div></div>
-  <div class="sec">Subjects</div><p class="muted">${paid?'Full access: saare questions aur unlimited mocks.':'Free access: har subject me pehle '+S.config.free_question_count+' questions + 1 free mock.'}</p>
-  <div id="subjList">${S.subjects.map(s=>`<div class="subj" data-slug="${s.slug}"><div class="nm"><b>${esc(s.name)}</b><span class="muted">${paid?'Full bank':'Free: '+s.free_question_count+' Q'}</span></div>${paid?'<span class="badge paid">PAID</span>':'<span class="badge free">FREE</span>'}</div>`).join('')}</div>
-  ${!paid?`<div class="card center"><h3>${S.profile&&S.profile.is_paid?'Plan khatam ho gaya':'Unlock full access'}</h3><p class="muted">Saare 6,400+ questions, unlimited mocks, weak-topic analysis, rank. ${S.profile&&S.profile.is_paid?'Renew ke liye':'Full access ke liye'} Topper Haveli admin se contact karo.</p></div>`:''}`);
+  <div class="hero"><div class="herol"><span class="semi">${svg('grad')} TOPPER HAVELI &middot; JVVNL JA</span>
+   <h1 class="h1">Welcome back${nm?', '+esc(nm):''}!</h1>
+   <p class="lead">${st.totalA?`You have solved <b>${st.totalA} questions</b> at <b>${st.acc}% accuracy</b>${st.streak?` and you are on a <b>${st.streak}-day</b> streak`:''}.`:'Solve your first question today and start your <b>study streak</b>.'}</p></div>
+   <div class="hchips">${st.streak?`<span class="hchip c1">${svg('fire')} ${st.streak} Day Streak</span>`:''}${st.acc!=null?`<span class="hchip c3">${svg('target')} ${st.acc}% Accuracy</span>`:''}<span class="hchip c2">${svg('trophy')} ${paid?'Full Access':'Free Plan'}</span></div></div>
+  <div class="two wide"><div class="card pad resume">${resume}</div>
+   <div class="card pad"><div class="mastery">${mr||'<div class="empty">Subject mastery yahan dikhega, jaise hi tum practice shuru karoge.</div>'}</div><div class="rfoot"><span class="rmeta">${paid?'Unlimited mocks':'1 free mock per subject'}</span><a class="btn dark" href="${mockTo}">Start a Mock ${svg('arrow')}</a></div></div></div>
+  ${analyticsBlock(st)}
+  <div class="two wide2"><div><div class="sechead"><h2 class="h2s">${svg('book','o')} Study Subjects</h2><span class="sub">${(S.subjects||[]).length} subjects</span></div>
+   <div id="subjList">${(S.subjects||[]).map(s=>{const p=st.per[s.slug];return `<div class="srow subj" data-slug="${s.slug}"><span class="itile t-acc">${svg('file')}</span><div class="nm"><b>${esc(s.name)}</b><span class="sub">${p?p.n+' solved &middot; '+Math.round(100*p.c/p.n)+'% accuracy':(paid?'Full bank':'Free preview: '+s.free_question_count+' Q')}</span></div><span class="tpill ${paid?'t-acc':'t-good'}">${paid?'PAID':'FREE'}</span><span class="go">${svg('arrow')}</span></div>`}).join('')}</div>
+   ${!paid?`<div class="card pad unlock"><h3 class="h3">${S.profile&&S.profile.is_paid?'Plan khatam ho gaya':'Unlock full access'}</h3><p class="sub">All 6,000+ questions, unlimited mocks, weak-topic analysis and rank. ${S.profile&&S.profile.is_paid?'Renew ke liye':'Full access ke liye'} Topper Haveli admin se contact karo.</p></div>`:''}</div>
+   <div><div class="sechead"><h2 class="h2s">${svg('clock','o')} Recent Mock Tests</h2><span class="sub">${st.mocks.length} done</span></div>${mocksList(st.mocks)}</div></div>`);
   document.querySelectorAll('.subj').forEach(d=>d.onclick=()=>{location.hash='#/subject/'+d.dataset.slug;});}
 
 async function vSubject(slug){nav('home');await fetchSubjects();
-  const qs=await fetchQuestions(slug);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;
-  setApp(`<div class="card"><div class="row"><a class="chipbtn" href="#/home">&lsaquo; Back</a></div><h2 class="mt">${esc(subjName(slug))}</h2><p class="muted">Kya karna hai?</p>
-  ${nM?`<a class="btn primary block" href="#/practice/${slug}/Practice">MCQ Practice <span class="muted" style="color:inherit;opacity:.8">(${nM})</span></a>`:''}
-  ${nP?`<a class="btn block" href="#/practice/${slug}/PYQ">PYQ - pichhle saalon ke sawal <span class="muted">(${nP})</span></a>`:''}
-  <a class="btn block" href="#/mocksetup/${slug}">Mock test</a></div>`);}
+  const qs=await fetchQuestions(slug);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;const paid=isPaid();
+  const card=(ic,t,sub,cnt,href,btn,dis)=>`<div class="card pad scrd ${dis?'dis':''}"><span class="itile t-acc">${svg(ic)}</span><h3 class="h3">${t}</h3><p class="sub">${sub}</p>${cnt?`<div class="cnt">${cnt}<small> questions</small></div>`:''}${dis?`<span class="btn" aria-disabled="true">${btn}</span>`:`<a class="btn primary" href="${href}">${btn} ${svg('arrow')}</a>`}</div>`;
+  setApp(`<div class="crumb"><a href="#/home">Dashboard</a> &rsaquo; ${esc(subjName(slug))}</div><h1 class="h1 sm">${esc(subjName(slug))}</h1><p class="lead">Choose how you want to study. MCQ, previous-year questions and notes are kept separate.</p>
+  <div class="trio">
+   ${card('list','MCQ Practice','Topic-wise practice questions with explanations.',nM,'#/practice/'+slug+'/Practice',nM?'Start MCQs':'Not in your plan',!nM)}
+   ${card('file','Previous Year Questions','Real exam questions from 2018 onwards.',nP,'#/practice/'+slug+'/PYQ',nP?'Start PYQs':'Not in your plan',!nP)}
+   ${card('book','Study Notes','Short notes and revision material.',null,'#','Coming soon',true)}
+   ${card('clock','Mock Test',paid?'Timed test, choose your size.':'1 free timed mock for this subject.',null,'#/mocksetup/'+slug,'Start Mock')}
+  </div>`);}
 
 async function vPractice(slug,initSrc){nav('home');
   setApp('<div class="card center muted">Questions load ho rahe hain…</div>');
@@ -269,13 +330,10 @@ async function vDashboard(){nav('dashboard');await fetchSubjects();
     const weak=Object.entries(bySrc).filter(([,v])=>v.n>=5).map(([k,v])=>({k,pct:Math.round(100*v.c/v.n),n:v.n})).sort((a,b)=>a.pct-b.pct).slice(0,5);
     paidHtml=`<div class="card"><h3>Weak topics (paid)</h3>${weak.length?weak.map(w=>`<div class="row"><span style="flex:1">${esc(w.k)}</span><span class="badge ${w.pct<50?'warn':'free'}">${w.pct}%</span><span class="muted">${w.n} Q</span></div>`).join(''):'<p class="muted">Thodi aur practice karo, phir analysis dikhega.</p>'}</div>
     <div class="card"><h3>Rank (paid)</h3><div class="grid2">${rankHtml}<div class="stat"><b>${totalA}</b><span>Total answered</span></div></div></div>`;}
-  setApp(`<div class="card"><div class="row"><h2 style="flex:1;margin:0">Dashboard</h2>${planChip()}</div>
-    <div class="grid2 mt"><div class="stat"><b>${totalC}/${totalA}</b><span>Correct</span></div><div class="stat"><b>${totalA?Math.round(100*totalC/totalA):0}%</b><span>Accuracy</span></div>
-    <div class="stat"><b>${streak}</b><span>Day streak</span></div><div class="stat"><b>${(mocks||[]).length}</b><span>Mocks done</span></div></div></div>
-  <div class="card"><h3>Subject-wise</h3>${S.subjects.filter(s=>per[s.slug]).map(s=>{const p=Math.round(100*per[s.slug].c/per[s.slug].n);return `<div style="margin:10px 0"><div class="row"><span style="flex:1;font-weight:600">${esc(s.name)}</span><span class="badge ${p>=75?'free':p>=50?'paid':'warn'}">${p}%</span></div><div class="pbar"><i class="${p>=75?'g':p<50?'r':''}" style="width:${p}%"></i></div><span class="muted">${per[s.slug].c}/${per[s.slug].n} sahi</span></div>`}).join('')||'<p class="muted">Abhi koi practice nahi.</p>'}</div>
+  const st=await loadStats();
+  setApp(`<div class="crumb">Dashboard &rsaquo; Analytics</div><h1 class="h1 sm">Analytics</h1>${analyticsBlock(st)}
   ${paidHtml}
-  ${trendHtml(mocks)}
-  <div class="card"><h3>Mock history</h3>${(mocks||[]).map(mk=>`<a class="row" style="min-height:44px;text-decoration:none;color:inherit" href="#/mockreview/${mk.id}"><span style="flex:1">${esc(subjName(mk.subject_slug))}</span><span class="muted">${(mk.completed_at||'').slice(0,10)}</span><span class="badge paid">${mk.score}/${mk.total} &rsaquo;</span></a>`).join('')||'<p class="muted">Koi mock nahi.</p>'}</div>
+  <div class="card pad"><h3 class="h3">Mock history</h3>${(mocks||[]).map(mk=>`<a class="row" style="min-height:44px;text-decoration:none;color:inherit" href="#/mockreview/${mk.id}"><span style="flex:1">${esc(subjName(mk.subject_slug))}</span><span class="muted">${(mk.completed_at||'').slice(0,10)}</span><span class="badge paid">${mk.score}/${mk.total} &rsaquo;</span></a>`).join('')||'<p class="muted">Koi mock nahi.</p>'}</div>
   ${!paid?'<div class="card center"><p class="muted">Paid me: weak-topic analysis, rank, unlimited mocks, saare questions.</p></div>':''}`);}
 
 function trendHtml(mocks){const ms=[...(mocks||[])].reverse().filter(m=>m.total);if(ms.length<2)return '';
