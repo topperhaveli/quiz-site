@@ -188,9 +188,19 @@ async function vHome(){nav('home');await fetchSubjects();
     resume=`<div class="pillbtn">RESUME LAST PRACTICE</div><span class="rtime">${svg('clock')} ${fmtAgo(st.last.created_at)}</span><h2 class="rtitle">${esc(lastSubj.name)}</h2><p class="rsub">${n} questions solved in this subject.</p><div class="rbar"><span>Subject Progress</span><b>${avail?Math.round(100*n/avail):0}%</b></div><div class="pbar"><i style="width:${avail?Math.min(100,Math.round(100*n/avail)):0}%"></i></div><div class="rfoot"><span class="rmeta">${svg('check','g')} ${n} of ${avail||'-'} questions done</span><a class="btn primary" href="#/subject/${lastSubj.slug}">Continue Learning ${svg('arrow')}</a></div>`;}
   else{const f=(S.subjects||[])[0];
     resume=`<div class="pillbtn">START HERE</div><h2 class="rtitle">${f?esc(f.name):'Pehla subject chuno'}</h2><p class="rsub">Pehla sawal solve karke apni journey shuru karo.</p><div class="rfoot"><span class="rmeta">${svg('book','g')} ${(S.subjects||[]).length} subjects available</span>${f?`<a class="btn primary" href="#/subject/${f.slug}">Start Learning ${svg('arrow')}</a>`:''}</div>`;}
+  let annHtml='';
+  try{const[{data:anns},{data:myD}]=await Promise.all([
+      sb.from('announcements').select('id,title,body,pinned,created_at').order('pinned',{ascending:false}).order('created_at',{ascending:false}).limit(4),
+      sb.from('doubts').select('id,status,reply,replied_at,created_at').eq('user_id',S.session.user.id).order('created_at',{ascending:false}).limit(20)]);
+    const seen=Number(localStorage.getItem('th_doubt_seen')||0);
+    const newReplies=(myD||[]).filter(d=>d.reply&&new Date(d.replied_at||d.created_at).getTime()>seen).length;
+    const openN=(myD||[]).filter(d=>d.status!=='answered'&&!d.reply).length;
+    annHtml=((anns&&anns.length)?`<div class="card pad annc"><h3 class="h3">${svg('book')} Notice Board</h3>${anns.map(a=>`<div class="annrow"><b>${a.pinned?'<span class="badge warn">PINNED</span> ':''}${esc(a.title)}</b>${a.body?`<p class="muted small" style="margin:3px 0 0;white-space:pre-wrap">${esc(a.body)}</p>`:''}<span class="muted small">${new Date(a.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span></div>`).join('')}</div>`:'')+
+      ((myD&&myD.length)?`<a class="card pad annc" style="display:block;text-decoration:none;color:inherit" href="#/doubts"><b>My Doubts</b> <span class="muted small">${newReplies?newReplies+' new reply':openN?openN+' waiting for answer':'all answered'}</span> <span style="float:right">&rsaquo;</span></a>`:'');
+  }catch(e){}
   const mr=masteryRows(st,4);
   const mockTo=lastSubj?'#/mocksetup/'+lastSubj.slug:((S.subjects||[])[0]?'#/mocksetup/'+S.subjects[0].slug:'#/home');
-  setApp(`${note?`<div class="notice ok">${esc(note)}</div>`:''}
+  setApp(`${note?`<div class="notice ok">${esc(note)}</div>`:''}${annHtml}
   <div class="hero"><div class="herol"><span class="semi">${svg('grad')} TOPPER HAVELI &middot; JVVNL JA</span>
    <h1 class="h1">Welcome back${nm?', '+esc(nm):''}!</h1>
    <p class="lead">${st.totalA?`You have solved <b>${st.totalA} questions</b> at <b>${st.acc}% accuracy</b>${st.streak?` and you are on a <b>${st.streak}-day</b> streak`:''}.`:'Solve your first question today and start your <b>study streak</b>.'}</p></div>
@@ -244,7 +254,9 @@ async function vPractice(slug,initSrc){nav('home');
     <div class="card"><p><span class="badge ${isPYQ(q)?'paid':'free'}">${esc(qLabel(q))}</span></p><p class="qtext">${esc(q.question)}</p>
     ${q.options.map((o,i)=>`<button class="opt ${done&&i===q.answer?'right':''} ${done&&i===a.chosen&&i!==q.answer?'wrong':''}" data-i="${i}" type="button" ${done?'disabled':''}>${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
     ${done?`<div class="expl"><b>Answer: ${String.fromCharCode(65+q.answer)}</b>${q.explanation?'<br>'+md(q.explanation):''}</div>`:''}
-    <div class="row mt"><button class="btn" id="prevB" type="button" ${idx===0?'disabled':''}>&lsaquo; Prev</button><span class="sp"></span><button class="btn" id="nextB" type="button" ${idx>=list.length-1?'disabled':''}>Next &rsaquo;</button></div></div>`);
+    <div class="row mt"><button class="btn" id="prevB" type="button" ${idx===0?'disabled':''}>&lsaquo; Prev</button><span class="sp"></span><button class="btn" id="nextB" type="button" ${idx>=list.length-1?'disabled':''}>Next &rsaquo;</button></div>
+    <div class="row mt"><button class="chipbtn" id="doubtB" type="button">? Doubt poochho</button></div>
+    <div id="doubtBox" class="hidden mt"><textarea id="doubtT" rows="3" maxlength="600" placeholder="Is question me kya samajh nahi aaya? Apna doubt likho."></textarea><div class="row mt" style="gap:8px"><button class="btn primary" id="doubtSend" type="button">Bhejo</button><span class="muted small" id="doubtMsg"></span></div></div></div>`);
     wire(list,q);if(window.__keepScroll){window.scrollTo(0,sy);window.__keepScroll=0;}}
   function wire(list,q){document.getElementById('fSrc').onchange=e=>{src=e.target.value;idx=0;render();};
     document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;idx=0;render();});
@@ -252,6 +264,10 @@ async function vPractice(slug,initSrc){nav('home');
       const row={user_id:S.session.user.id,question_id:q.id,subject_slug:slug,chosen:i,correct:i===q.answer,mode:'practice'};
       amap[q.id]={...row};window.__keepScroll=1;render();
       sb.from('attempts').upsert(row,{onConflict:'user_id,question_id'}).then(r=>{if(r.error)console.warn(r.error)});});
+    {const db=document.getElementById('doubtB');if(db&&q){db.onclick=()=>{document.getElementById('doubtBox').classList.toggle('hidden');};
+      document.getElementById('doubtSend').onclick=async()=>{const t=document.getElementById('doubtT').value.trim();const m=document.getElementById('doubtMsg');if(t.length<5){m.textContent='Thoda detail me likho.';return;}
+        m.textContent='Bhej raha hoon…';const{error}=await sb.from('doubts').insert({question_id:q.id,subject_slug:slug,body:t});
+        if(error){m.textContent='Nahi gaya: '+error.message;return;}document.getElementById('doubtT').value='';m.textContent='Doubt bhej diya. Jawab "My Doubts" me milega.';};}}
     document.getElementById('prevB').onclick=()=>{if(idx>0){idx--;render();}};
     document.getElementById('nextB').onclick=()=>{if(idx<list.length-1){idx++;render();}};}}
   render();}
@@ -367,6 +383,16 @@ async function vDashboard(){nav('dashboard');await fetchSubjects();
   <div class="card pad"><h3 class="h3">Mock history</h3>${(mocks||[]).map(mk=>`<a class="row" style="min-height:44px;text-decoration:none;color:inherit" href="#/mockreview/${mk.id}"><span style="flex:1">${esc(subjName(mk.subject_slug))}</span><span class="muted">${(mk.completed_at||'').slice(0,10)}</span><span class="badge paid">${mk.score}/${mk.total} &rsaquo;</span></a>`).join('')||'<p class="muted">Koi mock nahi.</p>'}</div>
   ${!paid?'<div class="card center"><p class="muted">Paid me: weak-topic analysis, rank, unlimited mocks, saare questions.</p></div>':''}`);}
 
+async function vDoubts(){nav('home');
+  setApp('<div class="card center muted">Doubts load ho rahe hain…</div>');
+  const{data,error}=await sb.from('doubts').select('id,subject_slug,question_id,body,status,reply,replied_at,created_at').eq('user_id',S.session.user.id).order('created_at',{ascending:false}).limit(60);
+  if(error){setApp(`<div class="card center"><p class="muted">${esc(error.message)}</p><a class="btn block" href="#/home">Back</a></div>`);return;}
+  localStorage.setItem('th_doubt_seen',String(Date.now()));
+  setApp(`<div class="crumb">Home &rsaquo; Doubts</div><h1 class="h1 sm">My Doubts</h1>
+  ${(data||[]).map(d=>`<div class="card"><p class="muted small">${esc(subjName(d.subject_slug))} · ${fmtAgo(d.created_at)}</p><p style="white-space:pre-wrap">${esc(d.body)}</p>
+   ${d.reply?`<div class="expl"><b>Answer</b><br><span style="white-space:pre-wrap">${esc(d.reply)}</span></div>`:'<p class="muted small">Jawab ka intezar hai.</p>'}</div>`).join('')||'<div class="card center muted">Abhi koi doubt nahi. Practice me kisi question ke neeche "Doubt poochho" dabao.</div>'}
+  <a class="btn block" href="#/home">Back</a>`);}
+
 function trendHtml(mocks){const ms=[...(mocks||[])].reverse().filter(m=>m.total);if(ms.length<2)return '';
   const W=300,H=110,pts=ms.map((m,i)=>[10+i*(280/(ms.length-1)),100-90*m.score/m.total]);
   const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
@@ -403,6 +429,20 @@ async function vAdmin(openId){nav('admin');
   if(e1||e2){setApp(`<div class="card center"><h3>Load nahi hua</h3><p class="muted">${esc((e1||e2).message)}</p></div>`);return;}
   const defDays=S.config.paid_validity_days||120;
   let q='',filter='all',sel=new Set(),detailId=null;
+  let ops={anns:[],doubts:[],hard:[]};
+  async function loadOps(){
+    const[a,d,h]=await Promise.all([
+      sb.from('announcements').select('id,title,body,pinned,expires_at,created_at').order('created_at',{ascending:false}).limit(20),
+      sb.from('doubts').select('id,user_id,subject_slug,question_id,body,status,reply,created_at').order('created_at',{ascending:false}).limit(40),
+      sb.rpc('admin_hardest_questions',{p_min:5})]);
+    ops.anns=a.data||[];ops.doubts=d.data||[];ops.hard=h.data||[];}
+  await loadOps();
+  const uname=id=>{const u=students.find(x=>x.id===id);return u?(u.display_name||u.email||'student'):'student';};
+  function csvStudents(list){
+    const cell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+    const rows=[['Name','Email','Plan','Valid till','Answers','Correct','Mocks','Last active','Joined']].concat(list.map(u=>[u.display_name||'',u.email||'',planStatus(u).t,u.paid_until?new Date(u.paid_until).toISOString().slice(0,10):'',u.answers,u.correct,u.mocks,u.last_active?new Date(u.last_active).toISOString().slice(0,10):'',u.created_at?new Date(u.created_at).toISOString().slice(0,10):'']));
+    const blob=new Blob(['\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\n')],{type:'text/csv'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='topper-haveli-students.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
 
   function filteredStudents(){
     const t=q.trim().toLowerCase();
@@ -411,6 +451,7 @@ async function vAdmin(openId){nav('admin');
       if(filter==='free'&&activePlan(u))return false;
       if(filter==='expiring'&&!(activePlan(u)&&u.paid_until&&new Date(u.paid_until).getTime()-Date.now()<15*86400000))return false;
       if(filter==='expired'&&!(u.is_paid&&u.paid_until&&new Date(u.paid_until).getTime()<=Date.now()))return false;
+      if(filter==='inactive'&&!(!u.last_active||Date.now()-new Date(u.last_active).getTime()>7*86400000))return false;
       if(t&&!(u.email||'').toLowerCase().includes(t)&&!(u.display_name||'').toLowerCase().includes(t))return false;
       return true;});}
 
@@ -444,8 +485,22 @@ async function vAdmin(openId){nav('admin');
     <div class="card"><h3>Last 14 days</h3>${barChart(ov.signups,ov.activity)}</div>
     <div class="card"><h3>Students</h3>
       <input id="aSearch" type="search" placeholder="Naam ya email se dhundo…" value="${esc(q)}">
-      <div class="row mt" style="flex-wrap:wrap">${[['all','Sab'],['paid','Paid'],['free','Free'],['expiring','Expiring <15d'],['expired','Expired']].map(f=>`<button class="chipbtn ${filter===f[0]?'on':''}" data-f="${f[0]}" type="button">${f[1]}</button>`).join('')}</div>
+      <div class="row mt" style="flex-wrap:wrap">${[['all','Sab'],['paid','Paid'],['free','Free'],['expiring','Expiring <15d'],['expired','Expired'],['inactive','Inactive 7d+']].map(f=>`<button class="chipbtn ${filter===f[0]?'on':''}" data-f="${f[0]}" type="button">${f[1]}</button>`).join('')}</div>
+      <div class="row mt"><button class="chipbtn" id="csvB" type="button">Export CSV (${list.length})</button></div>
       <div class="mt">${list.map(rowHtml).join('')||'<p class="muted center">Koi student nahi mila.</p>'}</div>
+    </div>
+    <div class="card"><div class="row"><h3 style="flex:1">Doubts inbox</h3><span class="badge ${ops.doubts.some(d=>!d.reply)?'warn':'free'}">${ops.doubts.filter(d=>!d.reply).length} open</span></div>
+      ${ops.doubts.filter(d=>!d.reply).slice(0,10).map(d=>`<div class="planbox" data-doubt="${d.id}"><p class="muted small" style="margin:0">${esc(uname(d.user_id))} · ${esc(subjName(d.subject_slug))} · ${fmtAgo(d.created_at)}</p><p style="white-space:pre-wrap;margin:4px 0">${esc(d.body)}</p>
+        <textarea rows="2" placeholder="Jawab likho" data-dreply="${d.id}"></textarea><div class="row mt"><button class="chipbtn on" data-dsend="${d.id}" type="button">Jawab bhejo</button></div></div>`).join('')||'<p class="muted">Koi open doubt nahi.</p>'}
+    </div>
+    <div class="card"><h3>Notice board</h3><p class="muted small">Yahan likha notice saare students ke home par dikhta hai. Post karne se pehle ek baar padh lo.</p>
+      <input id="anTitle" placeholder="Title" maxlength="120"><textarea id="anBody" rows="2" placeholder="Detail (optional)" maxlength="600"></textarea>
+      <div class="row mt" style="gap:8px;flex-wrap:wrap"><label class="chipbtn" style="cursor:pointer"><input type="checkbox" id="anPin" style="margin-right:6px">Pin</label><input id="anDays" type="number" min="1" placeholder="Din baad hatao" style="width:130px;padding:7px;margin:0"><button class="btn primary" id="anPost" type="button">Post</button></div>
+      <div class="notice hidden" id="anMsg"></div>
+      ${ops.anns.map(a=>`<div class="row" style="padding:7px 0;border-bottom:1px solid var(--line);gap:8px"><span style="flex:1"><b>${a.pinned?'<span class="badge warn">PINNED</span> ':''}${esc(a.title)}</b><br><span class="muted small">${new Date(a.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}${a.expires_at?' · till '+new Date(a.expires_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):''}</span></span><button class="chipbtn" data-andel="${a.id}" type="button">Hatao</button></div>`).join('')}
+    </div>
+    <div class="card"><h3>Sabse mushkil questions</h3><p class="muted small">Kam se kam 5 attempts wale questions, sabse kam accuracy pehle. Class me discuss karne ke liye.</p>
+      ${ops.hard.map(h=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><div class="row"><span class="muted small" style="flex:1">${esc(subjName(h.subject_slug))}</span><span class="badge ${h.pct<40?'warn':''}">${h.pct}% · ${h.n} attempts</span></div><div class="small">${esc(h.q)}</div></div>`).join('')||'<p class="muted">Abhi kaafi attempts nahi hain.</p>'}
     </div>
     <div class="card"><h3>Subject-wise usage</h3>
       ${(usage||[]).map(u=>`<div class="row" style="padding:7px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${esc(u.name)}</span><span class="muted">${u.answers} ans · ${u.users} users · ${u.mocks} mocks</span></div>`).join('')}
@@ -468,7 +523,15 @@ async function vAdmin(openId){nav('admin');
   }
 
   function wire(){
-    document.getElementById('aRefresh').onclick=async()=>{setApp('<div class="card center muted">Refreshing…</div>');await refreshStudents();render();};
+    document.getElementById('aRefresh').onclick=async()=>{setApp('<div class="card center muted">Refreshing…</div>');await refreshStudents();await loadOps();render();};
+    document.getElementById('csvB').onclick=()=>csvStudents(filteredStudents());
+    document.querySelectorAll('[data-dsend]').forEach(b=>b.onclick=async()=>{const id=b.dataset.dsend;const t=document.querySelector('[data-dreply="'+id+'"]').value.trim();if(!t)return;
+      const{error}=await sb.from('doubts').update({reply:t,status:'answered',replied_at:new Date().toISOString()}).eq('id',id);if(error){alert(error.message);return;}await loadOps();render();});
+    document.querySelectorAll('[data-andel]').forEach(b=>b.onclick=async()=>{if(!confirm('Ye notice hata dein?'))return;await sb.from('announcements').delete().eq('id',b.dataset.andel);await loadOps();render();});
+    document.getElementById('anPost').onclick=async()=>{const m=document.getElementById('anMsg');const title=document.getElementById('anTitle').value.trim();if(!title){m.textContent='Title likho.';m.classList.remove('hidden');return;}
+      const days=Number(document.getElementById('anDays').value)||0;
+      const{error}=await sb.from('announcements').insert({title,body:document.getElementById('anBody').value.trim(),pinned:document.getElementById('anPin').checked,expires_at:days?new Date(Date.now()+days*86400000).toISOString():null});
+      if(error){m.textContent=error.message;m.classList.remove('hidden');return;}await loadOps();render();};
     document.getElementById('aSearch').oninput=e=>{q=e.target.value;render();const el=document.getElementById('aSearch');el.focus();el.setSelectionRange(el.value.length,el.value.length);};
     document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;sel.clear();render();});
     document.querySelectorAll('[data-chk]').forEach(c=>c.onchange=e=>{e.stopPropagation();const id=c.dataset.chk;c.checked?sel.add(id):sel.delete(id);
@@ -547,6 +610,7 @@ async function vAdmin(openId){nav('admin');
       </div>
       <div class="notice hidden" id="dMsg"></div></div>
     <div class="card"><h3>Plan history</h3><div id="pHist" class="muted small">Load ho raha hai…</div></div>
+    <div class="card"><h3>Private note</h3><p class="muted small">Sirf admin ko dikhta hai (batch, parent ka number, follow-up).</p><textarea id="snT" rows="3" maxlength="1000" placeholder="Note likho"></textarea><div class="row mt" style="gap:8px"><button class="btn primary" id="snSave" type="button">Save note</button><span class="muted small" id="snMsg"></span></div></div>
     <div class="statgrid">
       ${statCard(d.answers,'Answers')}
       ${statCard(acc+'%','Accuracy')}
@@ -594,6 +658,8 @@ async function vAdmin(openId){nav('admin');
       const{error}=await sb.rpc('admin_revoke',{p_ids:[u.id]});
       if(error){note(error.message);return;}
       note('Access revoke ho gaya (free pe aa gaya).',true);renderDetail();refreshStudents();};
+    sb.from('student_notes').select('note').eq('user_id',u.id).maybeSingle().then(({data:n})=>{const t=document.getElementById('snT');if(t&&n)t.value=n.note||'';});
+    document.getElementById('snSave').onclick=async()=>{const m=document.getElementById('snMsg');const{error}=await sb.from('student_notes').upsert({user_id:u.id,note:document.getElementById('snT').value,updated_at:new Date().toISOString()});m.textContent=error?error.message:'Saved.';};
     sb.rpc('admin_plan_history',{p_id:u.id}).then(({data:hist})=>{
       const el=document.getElementById('pHist');if(!el)return;
       if(!hist||!hist.length){el.textContent='Abhi koi plan event nahi.';return;}
@@ -625,6 +691,7 @@ async function route(){const h=location.hash||'#/home';
   if(view==='mockrun')return vMockRun(arg);
   if(view==='mockreview')return vMockReview(arg);
   if(view==='notes')return vNotes(arg);
+  if(view==='doubts')return vDoubts();
   if(view==='dashboard')return vDashboard();
   if(view==='admin')return vAdmin(arg==='student'?parts[3]:null);
   return vHome();}
