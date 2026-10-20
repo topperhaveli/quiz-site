@@ -176,3 +176,6 @@ td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
 .pillbtn{align-self:flex-start}
 .herol{flex:1 1 440px;min-width:0}
 @media(min-width:1024px){.herol{max-width:700px}.hchips{max-width:340px;justify-content:flex-end;margin-bottom:6px}}
+
+.nrow .btn.sm{padding:7px 12px;font-size:12px;min-height:0;white-space:nowrap}.nrow{flex-wrap:wrap}.nchips{flex-wrap:wrap;gap:8px}.nchips .chipbtn{text-decoration:none;display:inline-block}
+@media(max-width:640px){.nrow .nm{flex-basis:calc(100% - 120px)}}
