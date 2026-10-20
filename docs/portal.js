@@ -97,7 +97,7 @@ function vLogin(){document.body.classList.remove('authed');document.getElementBy
   <button class="btn primary block" id="goBtn" type="button">Login</button>
   <p class="center mt"><a href="#" id="forgotL">Forgot password?</a></p>
   <div class="notice hidden" id="authMsg"></div></div>
-  <p class="muted center mt">Free account: practice sets + 1 free mock per subject + basic dashboard.<br>Paid: all 6,400+ questions, unlimited mocks, weak-topic analysis, rank.</p>`);
+  <p class="muted center mt">Free account: practice sets + 1 free mock per subject + basic dashboard.<br>Paid: full question banks, unlimited mocks, weak-topic analysis, rank.</p>`);
   let mode='in';
   const tab=m=>{mode=m;document.getElementById('tabIn').classList.toggle('on',m==='in');document.getElementById('tabUp').classList.toggle('on',m==='up');
     document.getElementById('nameRow').classList.toggle('hidden',m==='in');document.getElementById('goBtn').textContent=m==='in'?'Login':'Create account';document.getElementById('fPass').setAttribute('autocomplete',m==='in'?'current-password':'new-password');};
