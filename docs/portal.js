@@ -32,7 +32,7 @@ const qLabel=q=>{if(!isPYQ(q))return 'Practice';const s=String(q.source||'');if(
   if(!ex||ex.length>34)return 'PYQ';return ex+' '+y[1];};
 const isAdmin=()=>!!(S.profile&&S.profile.is_admin);
 
-async function fetchProfile(){const{data}=await sb.from('profiles').select('*').eq('id',S.session.user.id).single();S.profile=data;
+async function fetchProfile(){const{data}=await sb.from('profiles').select('*').eq('id',S.session.user.id).single();{const o=S.profile;if(o&&data&&(o.is_paid!==data.is_paid||o.paid_until!==data.paid_until||o.access_scope!==data.access_scope))S.qcache={};}S.profile=data;
   document.getElementById('navAdmin').classList.toggle('hidden',!isAdmin());['navAdmin2','sAdminLbl'].forEach(i=>{const e=document.getElementById(i);if(e)e.classList.toggle('hidden',!isAdmin());});
   const b=document.getElementById('userBadge');
   b.innerHTML=isAdmin()?'<span class="badge warn">ADMIN</span>':(isPaid()?'<span class="badge paid">PAID</span>':'<span class="badge free">FREE</span>');}
@@ -708,7 +708,7 @@ async function route(){const h=location.hash||'#/home';
   const{data}=await sb.auth.getSession();S.session=data.session;
   if(S.recovery){vReset();return;}
   if(!S.session){vLogin();return;}
-  await Promise.all([S.profile?0:fetchProfile(),fetchSubjects(),importLegacy(),S.accessOk?0:sb.rpc('my_access').then(r=>{S.access=Array.isArray(r.data)?r.data:[];S.accessOk=!r.error;}).catch(()=>{S.access=[];})]);
+  {const fresh=Date.now()-(S.entAt||0)<20000;await Promise.all([(S.profile&&fresh)?0:fetchProfile(),fetchSubjects(),importLegacy(),(S.accessOk&&fresh)?0:sb.rpc('my_access').then(r=>{const a=Array.isArray(r.data)?r.data:[];if(JSON.stringify(a)!==JSON.stringify(S.access||[]))S.qcache={};S.access=a;S.accessOk=!r.error;}).catch(()=>{S.access=[];})]);if(!fresh)S.entAt=Date.now();}
   const parts=h.split('/');const view=parts[1],arg=parts[2];
   if(view==='home')return vHome();
   if(view==='subject')return vSubject(arg);
