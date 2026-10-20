@@ -74,10 +74,13 @@ nav .wrap{min-height:64px}
 <div class="layout"><section class="question-card" id="questionCard" aria-live="polite"></section><aside class="side"><div class="side-card"><h3>Your progress</h3><p>Export a backup before switching browsers or clearing site data.</p><div class="progressbar"><span id="progressFill"></span></div><div class="side-row"><span>Answered</span><b id="sideAnswered">0 / 2,571</b></div><div class="side-row"><span>Correct</span><b id="sideCorrect">0</b></div><div class="side-row"><span>Incorrect</span><b id="sideWrong">0</b></div></div><div class="side-card"><h3>Subject counts</h3><div id="subjectCounts"></div></div><div class="side-card"><h3>Keep in mind</h3><p>Saved progress stays in the same browser profile. It will not automatically sync to another phone or computer. Avoid clearing site data if you want to keep it.</p><button class="btn" id="exportBtn" type="button">Export my progress</button></div></aside></div>
 </main>
 <footer class="footer"><div class="wrap"><span>JVVNL Prep • Independent practice project</span><span><a href="./?v=ce36ac3c2e8e">Back to home</a> · <a href="./subject-practice.html?subject=cost-accounting&amp;v=ce36ac3c2e8e">Costing: all sources</a></span></div></footer>
-<script src="./revision-progress.js?v=569fcc594e76"></script><script src="./consolidated-bank.js?v=b9f2ae3c7043"></script>
+<script src="./revision-progress.js?v=569fcc594e76"></script><script src="./banks/index.js?v=c2de20261020"></script><script src="./banks/loader.js?v=c2de20261020"></script>
 <script>
-(function(){
-const bank=window.JVVNL_CONSOLIDATED_BANK;
+(async function(){
+const bankIndex=window.JVVNL_BANK_INDEX;
+const bank={sections:(bankIndex&&bankIndex.sections)||[],questions:[],totalCount:bankIndex&&bankIndex.totalCount,consolidationVersion:bankIndex&&bankIndex.consolidationVersion,optionOrderMigrationV1:bankIndex&&bankIndex.optionOrderMigrationV1,duplicateAliases:bankIndex&&bankIndex.duplicateAliases,duplicateOptionMaps:bankIndex&&bankIndex.duplicateOptionMaps,duplicateCorrectAnswers:bankIndex&&bankIndex.duplicateCorrectAnswers,sourceVersion:bankIndex&&bankIndex.sourceVersion,sourceNotes:bankIndex&&bankIndex.sourceNotes};
+const loadedSlugs=new Set();
+const ensureSubject=async slug=>{if(slug==='all'){for(const s of bank.sections)await ensureSubject(s.slug);return;}if(loadedSlugs.has(slug))return;const b=await window.JVVNL_BANK_LOADER.loadSubject(slug);bank.questions.push(...b.questions);loadedSlugs.add(slug);};
 const belongs=(q,slug)=>q.subject===slug||(q.secondarySubjects||[]).includes(slug);
 if(!bank||!Array.isArray(bank.questions)){document.getElementById('questionCard').textContent='Question bank could not be loaded. Please refresh the page.';return;}
 const duplicateAliases=bank.duplicateAliases||Object.create(null);
@@ -94,6 +97,7 @@ const originalSubject=params.get('subject');const initial=aliases[originalSubjec
 let selectedBatch=params.get('batch')||'all';
 let selectedSource=params.get('source')||'all';
 let selectedSubject=validSlugs.has(initial)?initial:'all', selectedTopic=params.get('topic')||'all', filterMode='all', questionType=['core','pyq'].includes(params.get('type'))?params.get('type'):'all', search='', index=0;
+try{card.textContent='Loading questions…';await ensureSubject(selectedSubject);}catch(e){card.textContent='Question bank could not be loaded. Please refresh the page.';return;}
 let state={answers:{},bookmarks:[],positions:{},autoNext:false};
 try{const saved=JSON.parse(localStorage.getItem('jvvnl-source-bank-progress-v1')||'null');if(saved&&typeof saved==='object'){state={...state,...saved};state.answers=saved.answers||{};state.bookmarks=Array.isArray(saved.bookmarks)?saved.bookmarks:[];state.positions=saved.positions&&typeof saved.positions==='object'?saved.positions:{};state.optionOrderVersion=saved.optionOrderVersion;state.notes=saved.notes||{};state.reports=saved.reports||[];state.consolidationV1=saved.consolidationV1;state.migrations=saved.migrations||{};if(typeof saved.autoNext==='boolean')state.autoNext=saved.autoNext;}}catch(e){}
 if(state.optionOrderVersion!==1){const maps=bank.optionOrderMigrationV1||{};Object.entries(state.answers).forEach(([id,selected])=>{const map=maps[id],oldIndex=Number(selected);if(Array.isArray(map)&&Number.isInteger(oldIndex)&&map[oldIndex]!==undefined)state.answers[id]=map[oldIndex];});state.optionOrderVersion=1;}
@@ -117,6 +121,7 @@ const revisedAttempts=window.JVVNL_REVISIONS.migrate(state,bank);
 const routeKey=[initial||'all',params.get('source')||'all',params.get('batch')||'all',params.get('topic')||'all',params.get('type')||'all'].join('|');
 let restoredView=null;try{restoredView=JSON.parse(sessionStorage.getItem('jvvnl-view:'+routeKey)||'null')||state.studyViews?.[routeKey]||null;}catch(e){}
 if(restoredView){selectedSubject=validSlugs.has(restoredView.subject)?restoredView.subject:selectedSubject;selectedSource=restoredView.source||'all';selectedBatch=restoredView.batch||'all';selectedTopic=restoredView.topic||'all';filterMode=['all','unanswered','wrong','bookmarked'].includes(restoredView.filter)?restoredView.filter:'all';questionType=restoredView.type||'all';search=restoredView.search||'';}
+try{await ensureSubject(selectedSubject);}catch(e){card.textContent='Question bank could not be loaded. Please refresh the page.';return;}
 let reviewQueue=restoredView?.queue||null,reviewQueueKey=restoredView?.queueKey||null;
 
 const oldPositionSubject=originalSubject||selectedSubject;const oldPositionKey=oldPositionSubject+'|'+selectedTopic+'|'+filterMode+'|'+questionType+'|'+search+(selectedBatch==='all'?'':'|batch:'+selectedBatch);
@@ -177,7 +182,7 @@ if(wrongBtn)wrongBtn.onclick=()=>{filterMode='wrong';index=0;document.querySelec
 const unansweredBtn=$('reviewUnansweredBtn');
 if(unansweredBtn)unansweredBtn.onclick=()=>{filterMode='unanswered';index=0;document.querySelectorAll('.chip').forEach(button=>button.classList.toggle('active',button.dataset.filter===filterMode));render();save();card.scrollIntoView({behavior:'smooth',block:'start'});};
 $('returnQuestionsBtn').onclick=()=>{index=0;render();save();card.scrollIntoView({behavior:'smooth',block:'start'});};
-$('allSubjectsBtn').onclick=()=>{selectedSubject='all';selectedTopic='all';selectedBatch='all';refreshBatches();filterMode='all';search='';index=0;subjectSelect.value='all';refreshTopics();topicSelect.value='all';searchBox.value='';document.querySelectorAll('.chip').forEach(button=>button.classList.toggle('active',button.dataset.filter==='all'));render();save();card.scrollIntoView({behavior:'smooth',block:'start'});};
+$('allSubjectsBtn').onclick=async()=>{card.textContent='Loading questions…';try{await ensureSubject('all');}catch(e){card.textContent='Question bank could not be loaded. Please refresh the page.';return;}selectedSubject='all';selectedTopic='all';selectedBatch='all';refreshBatches();filterMode='all';search='';index=0;subjectSelect.value='all';refreshTopics();topicSelect.value='all';searchBox.value='';document.querySelectorAll('.chip').forEach(button=>button.classList.toggle('active',button.dataset.filter==='all'));render();save();card.scrollIntoView({behavior:'smooth',block:'start'});};
 }
 function render(){
 const list=questionsForView();if(index>=list.length)index=Math.max(0,list.length-1);
@@ -193,7 +198,7 @@ $('prevBtn').onclick=()=>{cancelAutoAdvance();index=Math.max(0,index-1);save();r
 $('nextBtn').onclick=()=>{cancelAutoAdvance();if(index<list.length-1){index++;save();render();card.scrollIntoView({behavior:'smooth',block:'start'});}else{finishView(list);card.scrollIntoView({behavior:'smooth',block:'start'});}};
 updateStats();
 }
-subjectSelect.addEventListener('change',()=>{cancelAutoAdvance();selectedSubject=subjectSelect.value;selectedTopic='all';selectedBatch='all';refreshBatches();refreshTopics();index=Number.isInteger(state.positions[positionKey()])?state.positions[positionKey()]:0;resumePastAnswered();render();save();});
+subjectSelect.addEventListener('change',async()=>{cancelAutoAdvance();selectedSubject=subjectSelect.value;card.textContent='Loading questions…';try{await ensureSubject(selectedSubject);}catch(e){card.textContent='Question bank could not be loaded. Please refresh the page.';return;}selectedTopic='all';selectedBatch='all';refreshBatches();refreshTopics();index=Number.isInteger(state.positions[positionKey()])?state.positions[positionKey()]:0;resumePastAnswered();render();save();});
 const questionTypeSelect=$('questionTypeSelect');questionTypeSelect.value=questionType;questionTypeSelect.addEventListener('change',()=>{cancelAutoAdvance();questionType=questionTypeSelect.value;index=Number.isInteger(state.positions[positionKey()])?state.positions[positionKey()]:0;resumePastAnswered();render();save();});
 topicSelect.addEventListener('change',()=>{cancelAutoAdvance();selectedTopic=topicSelect.value;index=Number.isInteger(state.positions[positionKey()])?state.positions[positionKey()]:0;resumePastAnswered();render();save();});
 searchBox.addEventListener('input',()=>{cancelAutoAdvance();search=searchBox.value.trim().toLowerCase();index=Number.isInteger(state.positions[positionKey()])?state.positions[positionKey()]:0;resumePastAnswered();render();save();});
