@@ -33,6 +33,8 @@ from import_notes_mcq import content_signature
 ROOT = pathlib.Path(__file__).resolve().parents[1]; DOCS = ROOT/'docs'
 SRC = pathlib.Path(os.environ.get('RAJA_BANK_SRC', str(DOCS)))
 CFG = json.loads((ROOT/'scripts/rajasthan-topics.json').read_text())
+# Frozen per-question assignments live with the private source banks.
+ASSIGNMENTS = json.loads((SRC/'rajasthan-assignments.json').read_text())
 SAMPLE = {'rajasthan-gk': {'pyq': 50, 'mcq': 0},
           'rajasthan-history': {'mcq': 30, 'pyq': 20},
           'rajasthan-geography': {'mcq': 30, 'pyq': 20},
@@ -67,7 +69,7 @@ def collect():
                 continue
             legacy = str(q.get('id', q.get('number')))
             ident = prefix+'-'+legacy
-            target = CFG['assignments'].get(ident)
+            target = ASSIGNMENTS.get(ident)
             if not target:
                 unassigned.append(ident); continue
             slug, topic_id = target
@@ -78,7 +80,7 @@ def collect():
             row['topicId'] = topic_id
             banks[slug].append(row)
     if unassigned:
-        print('UNASSIGNED source questions (add to scripts/rajasthan-topics.json assignments):')
+        print('UNASSIGNED source questions (add to rajasthan-assignments.json in RAJA_BANK_SRC):')
         for i in unassigned: print(' ', i)
         sys.exit(1)
     for slug, subj in CFG['subjects'].items():
