@@ -69,7 +69,7 @@ function vLogin(){document.getElementById('navbar').classList.add('hidden');docu
   <p class="muted center mt">Free account: practice sets + 1 free mock per subject + basic dashboard.<br>Paid: all 6,400+ questions, unlimited mocks, weak-topic analysis, rank.</p>`);
   let mode='in';
   const tab=m=>{mode=m;document.getElementById('tabIn').classList.toggle('on',m==='in');document.getElementById('tabUp').classList.toggle('on',m==='up');
-    document.getElementById('nameRow').classList.toggle('hidden',m==='in');document.getElementById('goBtn').textContent=m==='in'?'Login':'Create account';};
+    document.getElementById('nameRow').classList.toggle('hidden',m==='in');document.getElementById('goBtn').textContent=m==='in'?'Login':'Create account';document.getElementById('fPass').setAttribute('autocomplete',m==='in'?'current-password':'new-password');};
   document.getElementById('tabIn').onclick=()=>tab('in');document.getElementById('tabUp').onclick=()=>tab('up');
   document.getElementById('forgotL').onclick=async(e)=>{e.preventDefault();
     const email=document.getElementById('fEmail').value.trim(),msg=document.getElementById('authMsg');
@@ -79,7 +79,7 @@ function vLogin(){document.getElementById('navbar').classList.add('hidden');docu
     if(error){msg.textContent=error.message;}else{msg.textContent='Reset link bhej diya. Email kholo, link dabao, naya password set karo.';msg.classList.add('ok');}};
   document.getElementById('goBtn').onclick=async()=>{
     const email=document.getElementById('fEmail').value.trim(),pass=document.getElementById('fPass').value,msg=document.getElementById('authMsg');
-    msg.classList.add('hidden');
+    msg.classList.add('hidden');msg.classList.remove('ok');
     if(!email||pass.length<6){msg.textContent='Email aur 6+ character password daalo.';msg.classList.remove('hidden');return;}
     document.getElementById('goBtn').disabled=true;
     try{
@@ -88,7 +88,7 @@ function vLogin(){document.getElementById('navbar').classList.add('hidden');docu
         msg.innerHTML='Account ban gaya. Agar confirmation email aaye to link khol lena, phir login karna.';msg.classList.remove('hidden');msg.classList.add('ok');
         const{data:ses}=await sb.auth.getSession();if(ses&&ses.session){location.hash='#/home';return;}}
       else{const{error}=await sb.auth.signInWithPassword({email,password:pass});if(error)throw error;location.hash='#/home';return;}
-    }catch(e){msg.textContent=e.message||'Login failed';msg.classList.remove('hidden');}
+    }catch(e){const m0=String(e.message||''),mm=/invalid login/i.test(m0)?'Email ya password galat hai.':/already registered/i.test(m0)?'Ye email pehle se registered hai. Login karo.':/email not confirmed/i.test(m0)?'Pehle email ka confirmation link kholo.':/rate limit|too many/i.test(m0)?'Bahut try ho gaye. Thodi der baad dobara karo.':/network|fetch/i.test(m0)?'Internet check karo aur dobara try karo.':(m0||'Login nahi hua. Dobara try karo.');msg.textContent=mm;msg.classList.remove('hidden','ok');}
     document.getElementById('goBtn').disabled=false;};}
 
 async function vHome(){nav('home');await fetchSubjects();
@@ -116,20 +116,23 @@ async function vHome(){nav('home');await fetchSubjects();
   document.querySelectorAll('.subj').forEach(d=>d.onclick=()=>{location.hash='#/subject/'+d.dataset.slug;});}
 
 async function vSubject(slug){nav('home');await fetchSubjects();
-  setApp(`<div class="card"><h2>${esc(subjName(slug))}</h2><p class="muted">Kya karna hai?</p>
-  <a class="btn primary block" href="#/practice/${slug}">Practice</a>
+  const qs=await fetchQuestions(slug);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;
+  setApp(`<div class="card"><div class="row"><a class="chipbtn" href="#/home">&lsaquo; Back</a></div><h2 class="mt">${esc(subjName(slug))}</h2><p class="muted">Kya karna hai?</p>
+  ${nM?`<a class="btn primary block" href="#/practice/${slug}/Practice">MCQ Practice <span class="muted" style="color:inherit;opacity:.8">(${nM})</span></a>`:''}
+  ${nP?`<a class="btn block" href="#/practice/${slug}/PYQ">PYQ - pichhle saalon ke sawal <span class="muted">(${nP})</span></a>`:''}
   <a class="btn block" href="#/mocksetup/${slug}">Mock test</a></div>`);}
 
-async function vPractice(slug){nav('home');
+async function vPractice(slug,initSrc){nav('home');
   setApp('<div class="card center muted">Questions load ho rahe hain…</div>');
   const qs=await fetchQuestions(slug);
   const atts=await fetchAttempts();
   const amap={};atts.forEach(a=>amap[a.question_id]=a);
   if(!qs.length){setApp('<div class="card center"><h3>No access</h3><p class="muted">Is subject ke questions abhi locked hain.</p><a class="btn block" href="#/home">Back</a></div>');return;}
   const sources=[...new Set(qs.map(qType))];
-  let idx=0,filter='all',src='all';
+  let idx=0,filter='all',src=(initSrc&&sources.includes(initSrc))?initSrc:'all';
+  {const l0=qs.filter(q=>src==='all'||qType(q)===src);const f=l0.findIndex(q=>amap[q.id]===undefined);if(f>0)idx=f;}
   const filtered=()=>qs.filter(q=>(src==='all'||qType(q)===src)&&(filter==='all'||(filter==='unanswered'&&amap[q.id]===undefined)||(filter==='wrong'&&amap[q.id]&&!amap[q.id].correct)||(filter==='correct'&&amap[q.id]&&amap[q.id].correct)));
-  function render(){const list=filtered();if(idx>=list.length)idx=Math.max(0,list.length-1);
+  function render(){const sy=window.scrollY;requestAnimationFrame(()=>{});const list=filtered();if(idx>=list.length)idx=Math.max(0,list.length-1);
     const q=list[idx];
     const srcOpts=['<option value="all">All questions</option>'].concat(sources.map(s=>`<option ${s===src?'selected':''} value="${esc(s)}">${esc(s)}</option>`)).join('');
     if(!q){setApp(`<div class="card"><div class="row"><a class="chipbtn" href="#/subject/${slug}">&lsaquo; Back</a></div>
@@ -144,12 +147,12 @@ async function vPractice(slug){nav('home');
     ${q.options.map((o,i)=>`<button class="opt ${done&&i===q.answer?'right':''} ${done&&i===a.chosen&&i!==q.answer?'wrong':''}" data-i="${i}" type="button" ${done?'disabled':''}>${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
     ${done?`<div class="expl"><b>Answer: ${String.fromCharCode(65+q.answer)}</b>${q.explanation?'<br>'+md(q.explanation):''}</div>`:''}
     <div class="row mt"><button class="btn" id="prevB" type="button" ${idx===0?'disabled':''}>&lsaquo; Prev</button><span class="sp"></span><button class="btn" id="nextB" type="button" ${idx>=list.length-1?'disabled':''}>Next &rsaquo;</button></div></div>`);
-    wire(list,q);}
+    wire(list,q);if(window.__keepScroll){window.scrollTo(0,sy);window.__keepScroll=0;}}
   function wire(list,q){document.getElementById('fSrc').onchange=e=>{src=e.target.value;idx=0;render();};
     document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;idx=0;render();});
     if(q){document.querySelectorAll('.opt').forEach(b=>b.onclick=async()=>{const i=Number(b.dataset.i);
       const row={user_id:S.session.user.id,question_id:q.id,subject_slug:slug,chosen:i,correct:i===q.answer,mode:'practice'};
-      amap[q.id]={...row};render();
+      amap[q.id]={...row};window.__keepScroll=1;render();
       sb.from('attempts').upsert(row,{onConflict:'user_id,question_id'}).then(r=>{if(r.error)console.warn(r.error)});});
     document.getElementById('prevB').onclick=()=>{if(idx>0){idx--;render();}};
     document.getElementById('nextB').onclick=()=>{if(idx<list.length-1){idx++;render();}};}}
@@ -163,7 +166,7 @@ async function vMockSetup(slug){nav('home');await fetchSubjects();
   const qs=await fetchQuestions(slug);
   const maxN=qs.length;
   setApp(`<div class="card"><h2>Mock - ${esc(subjName(slug))}</h2>
-  <p class="muted">${paid?'Paid: apni pasand ka size.':'FREE mock: 25 questions, 25 minutes.'} Available: ${maxN} questions.</p>
+  <p class="muted">${paid?'Paid: apni pasand ka size.':`FREE mock: ${Math.min(25,maxN)} questions, ${Math.min(25,maxN)} minutes.`} Available: ${maxN} questions.</p>
   ${paid?`<label>Questions</label><select id="mCount">${[25,50,100].filter(n=>n<=maxN).map(n=>`<option value="${n}">${n} questions (${n} min)</option>`).join('')}</select>`:''}
   <button class="btn primary block" id="startM" type="button">Start mock</button>
   <a class="btn block" href="#/subject/${slug}">Back</a></div>`);
@@ -266,7 +269,7 @@ async function vDashboard(){nav('dashboard');await fetchSubjects();
   <div class="card"><h3>Subject-wise</h3>${S.subjects.filter(s=>per[s.slug]).map(s=>{const p=Math.round(100*per[s.slug].c/per[s.slug].n);return `<div style="margin:10px 0"><div class="row"><span style="flex:1;font-weight:600">${esc(s.name)}</span><span class="badge ${p>=75?'free':p>=50?'paid':'warn'}">${p}%</span></div><div class="pbar"><i class="${p>=75?'g':p<50?'r':''}" style="width:${p}%"></i></div><span class="muted">${per[s.slug].c}/${per[s.slug].n} sahi</span></div>`}).join('')||'<p class="muted">Abhi koi practice nahi.</p>'}</div>
   ${paidHtml}
   ${trendHtml(mocks)}
-  <div class="card"><h3>Mock history</h3>${(mocks||[]).map(mk=>`<div class="row"><span style="flex:1">${esc(subjName(mk.subject_slug))}</span><span class="muted">${(mk.completed_at||'').slice(0,10)}</span><a href="#/mockreview/${mk.id}"><span class="badge paid">${mk.score}/${mk.total}</span></a></div>`).join('')||'<p class="muted">Koi mock nahi.</p>'}</div>
+  <div class="card"><h3>Mock history</h3>${(mocks||[]).map(mk=>`<a class="row" style="min-height:44px;text-decoration:none;color:inherit" href="#/mockreview/${mk.id}"><span style="flex:1">${esc(subjName(mk.subject_slug))}</span><span class="muted">${(mk.completed_at||'').slice(0,10)}</span><span class="badge paid">${mk.score}/${mk.total} &rsaquo;</span></a>`).join('')||'<p class="muted">Koi mock nahi.</p>'}</div>
   ${!paid?'<div class="card center"><p class="muted">Paid me: weak-topic analysis, rank, unlimited mocks, saare questions.</p></div>':''}`);}
 
 function trendHtml(mocks){const ms=[...(mocks||[])].reverse().filter(m=>m.total);if(ms.length<2)return '';
@@ -515,7 +518,7 @@ async function route(){const h=location.hash||'#/home';
   const parts=h.split('/');const view=parts[1],arg=parts[2];
   if(view==='home')return vHome();
   if(view==='subject')return vSubject(arg);
-  if(view==='practice')return vPractice(arg);
+  if(view==='practice')return vPractice(arg,parts[3]);
   if(view==='mocksetup')return vMockSetup(arg);
   if(view==='mockrun')return vMockRun(arg);
   if(view==='mockreview')return vMockReview(arg);
