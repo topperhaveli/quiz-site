@@ -199,9 +199,9 @@ async function vHome(){nav('home');await fetchSubjects();
    <div class="card pad"><div class="mastery">${mr||'<div class="empty">Subject mastery yahan dikhega, jaise hi tum practice shuru karoge.</div>'}</div><div class="rfoot"><span class="rmeta">${paid?'Unlimited mocks':'1 free mock per subject'}</span><a class="btn dark" href="${mockTo}">Start a Mock ${svg('arrow')}</a></div></div></div>
   ${analyticsBlock(st)}
   <div class="two wide2"><div>   <div class="sechead"><h2 class="h2s">${svg('target','o')} Rajasthan Special</h2><span class="sub">4 sections</span></div>
-   <div id="rajList">${[['Rajasthan GK','Official-key PYQs (RAS, SI, Sr Teacher and more) plus recall bank.','rajasthan-gk','pyq'],['Rajasthan Geography','MCQs and PYQs with topic filter.','rajasthan-geography','core'],['Rajasthan History','MCQs and PYQs with topic filter.','rajasthan-history','core'],['Rajasthan Art & Culture','MCQs and PYQs with topic filter.','rajasthan-art-culture','core']].map(r=>`<a class="srow" style="text-decoration:none;color:inherit" href="./subject-practice.html?subject=${r[2]}&type=${r[3]}"><span class="itile t-acc">${svg('target')}</span><div class="nm"><b>${r[0]}</b><span class="sub">${r[1]}</span></div><span class="tpill t-good">OPEN</span></a>`).join('')}</div>
+   <div id="rajList">${[['Rajasthan GK','Previous-year papers: RAS, Sub-Inspector, Senior Teacher.','rajasthan-gk'],['Rajasthan History','MCQs and previous-year questions.','rajasthan-history'],['Rajasthan Geography','MCQs and previous-year questions.','rajasthan-geography'],['Rajasthan Art & Culture','MCQs and previous-year questions.','rajasthan-art-culture']].map(r=>{const full=hasFull(r[2]);return `<a class="srow" style="text-decoration:none;color:inherit" href="#/subject/${r[2]}"><span class="itile t-acc">${svg('target')}</span><div class="nm"><b>${r[0]}</b><span class="sub">${r[1]}</span></div><span class="tpill ${full?'t-acc':'t-good'}">${full?'FULL ACCESS':'FREE PREVIEW'}</span></a>`}).join('')}</div>
 <div class="sechead"><h2 class="h2s">${svg('book','o')} Study Subjects</h2><span class="sub">${(S.subjects||[]).length} subjects</span></div>
-   <div id="subjList">${(S.subjects||[]).map(s=>{const p=st.per[s.slug];return `<div class="srow subj" data-slug="${s.slug}"><span class="itile t-acc">${svg('file')}</span><div class="nm"><b>${esc(s.name)}</b><span class="sub">${p?p.n+' solved &middot; '+Math.round(100*p.c/p.n)+'% accuracy':(paid?'Full bank':'Free preview: '+s.free_question_count+' Q')}</span></div><span class="tpill ${paid?'t-acc':'t-good'}">${paid?'PAID':'FREE'}</span><span class="go">${svg('arrow')}</span></div>`}).join('')}</div>
+   <div id="subjList">${(S.subjects||[]).filter(s=>!/^rajasthan-/.test(s.slug)).map(s=>{const p=st.per[s.slug];return `<div class="srow subj" data-slug="${s.slug}"><span class="itile t-acc">${svg('file')}</span><div class="nm"><b>${esc(s.name)}</b><span class="sub">${p?p.n+' solved &middot; '+Math.round(100*p.c/p.n)+'% accuracy':(paid?'Full bank':'Free preview: '+s.free_question_count+' Q')}</span></div><span class="tpill ${paid?'t-acc':'t-good'}">${paid?'PAID':'FREE'}</span><span class="go">${svg('arrow')}</span></div>`}).join('')}</div>
    ${!paid?`<div class="card pad unlock"><h3 class="h3">${S.profile&&S.profile.is_paid?'Plan khatam ho gaya':'Unlock full access'}</h3><p class="sub">All 6,000+ questions, unlimited mocks, weak-topic analysis and rank. ${S.profile&&S.profile.is_paid?'Renew ke liye':'Full access ke liye'} Topper Haveli admin se contact karo.</p></div>`:''}</div>
    <div><div id="notesHome"></div><div class="sechead"><h2 class="h2s">${svg('clock','o')} Recent Mock Tests</h2><span class="sub">${st.mocks.length} done</span></div>${mocksList(st.mocks)}</div></div>`);
   document.querySelectorAll('.subj').forEach(d=>d.onclick=()=>{location.hash='#/subject/'+d.dataset.slug;});
@@ -394,7 +394,7 @@ function barChart(seriesA,seriesB){
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid}${bars(seriesA,'#c2652a',0)}${bars(seriesB,'#e08850',bw/2)}${labels}</svg>
   <div class="row" style="gap:14px;justify-content:center"><span class="legend"><i style="background:#c2652a"></i>Signups</span><span class="legend"><i style="background:#e08850"></i>Answers</span></div>`;}
 
-async function vAdmin(){nav('admin');
+async function vAdmin(openId){nav('admin');
   if(!isAdmin()){setApp('<div class="card center muted">Admin only.</div>');return;}
   setApp('<div class="card center muted">Admin dashboard load ho raha hai…</div>');
   const[{data:ov,error:e1},{data:students,error:e2},{data:usage}]=await Promise.all([
@@ -425,7 +425,7 @@ async function vAdmin(){nav('admin');
       <div class="umain"><b>${esc(u.display_name||'(naam nahi)')}</b> ${u.is_admin?'<span class="badge warn">ADMIN</span>':''}<br>
       <span class="muted">${esc(u.email||'')}</span><br>
       <span class="muted">${u.answers} ans · ${acc} · ${u.mocks} mocks · ${fmtAgo(u.last_active)}</span></div>
-      <div class="uright"><span class="badge ${st.c}">${st.t}</span>
+      <div class="uright"><span class="badge ${st.c}">${st.t}</span><a class="chipbtn smallbtn" href="#/admin/student/${u.id}" target="_blank" rel="noopener" title="Open in new tab">&#8599; Tab</a>
       ${(expiring||st.t==='EXPIRED')?`<button class="chipbtn smallbtn" data-renew="${u.id}" type="button">&#8635;+30d</button>`:''}</div></div>`;}
 
   function render(){
@@ -473,7 +473,7 @@ async function vAdmin(){nav('admin');
     document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;sel.clear();render();});
     document.querySelectorAll('[data-chk]').forEach(c=>c.onchange=e=>{e.stopPropagation();const id=c.dataset.chk;c.checked?sel.add(id):sel.delete(id);
       const bb=document.getElementById('bulkBar');bb.classList.toggle('hidden',!sel.size);bb.querySelector('span').textContent=sel.size+' selected';});
-    document.querySelectorAll('.urow').forEach(r=>r.onclick=e=>{if(e.target.dataset.chk)return;detailId=r.dataset.uid;renderDetail();});
+    document.querySelectorAll('.urow').forEach(r=>r.onclick=e=>{if(e.target.dataset.chk||e.target.closest('a'))return;detailId=r.dataset.uid;renderDetail();});
     const bb=document.getElementById('bulkBar');
     document.getElementById('bulkClear').onclick=()=>{sel.clear();render();};
     document.getElementById('bulkApply').onclick=async()=>{
@@ -510,7 +510,7 @@ async function vAdmin(){nav('admin');
     if(error||!d||!d.profile){setApp('<div class="card center"><p class="muted">Load nahi hua.</p><button class="btn block" id="backB">Back</button></div>');document.getElementById('backB').onclick=render;return;}
     const{data:accRow}=await sb.from('student_access').select('subjects').eq('user_id',detailId).maybeSingle();
     const granted=new Set((accRow&&accRow.subjects)||[]);
-    const accTokens=[['Rajasthan',[['rajasthan-gk','Rajasthan GK'],['rajasthan-geography','Rajasthan Geography'],['rajasthan-history','Rajasthan History'],['rajasthan-art-culture','Rajasthan Art & Culture']]],['Subjects',(S.subjects||[]).map(x=>[x.slug,x.name])],['Notes',[['notes','All Study Notes (PDFs)']]]];
+    const accTokens=[['Rajasthan',[['rajasthan-gk','Rajasthan GK'],['rajasthan-geography','Rajasthan Geography'],['rajasthan-history','Rajasthan History'],['rajasthan-art-culture','Rajasthan Art & Culture']]],['Subjects',(S.subjects||[]).filter(x=>!/^rajasthan-/.test(x.slug)).map(x=>[x.slug,x.name])],['Notes',[['notes','All Study Notes (PDFs)']]]];
     const u=d.profile,acc=d.answers?Math.round(100*d.correct/d.answers):0;
     const nm=s=>subjName(s);
     setApp(`
@@ -608,7 +608,7 @@ async function vAdmin(){nav('admin');
         <span class="sp"></span><span class="muted small">${new Date(h.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>
       </div>`).join('');});
   }
-  render();
+  if(openId){detailId=openId;renderDetail();}else render();
 }
 
 async function route(){const h=location.hash||'#/home';
@@ -626,7 +626,7 @@ async function route(){const h=location.hash||'#/home';
   if(view==='mockreview')return vMockReview(arg);
   if(view==='notes')return vNotes(arg);
   if(view==='dashboard')return vDashboard();
-  if(view==='admin')return vAdmin();
+  if(view==='admin')return vAdmin(arg==='student'?parts[3]:null);
   return vHome();}
 document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut();S.profile=null;S.qcache={};S.access=null;S.accessOk=false;S.notes=null;S.subjects=null;location.hash='#/login';route();};
 window.addEventListener('hashchange',route);
