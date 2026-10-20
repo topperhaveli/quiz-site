@@ -293,8 +293,8 @@ function barChart(seriesA,seriesB){
   const labels=seriesA.map((d,i)=>i%4===1?`<text x="${(PL+i*bw+bw/2).toFixed(1)}" y="${H-8}" font-size="9" fill="var(--dim)" text-anchor="middle">${d.day.slice(8)}/${d.day.slice(5,7)}</text>`:'').join('');
   const grid=[0.25,0.5,0.75,1].map(f=>{const y=H-PB-(H-PT-PB)*f;
     return `<line x1="${PL}" y1="${y}" x2="${W-4}" y2="${y}" stroke="var(--line)" stroke-width="0.5"/><text x="${PL-4}" y="${y+3}" font-size="8" fill="var(--dim)" text-anchor="end">${Math.round(max*f)}</text>`;}).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid}${bars(seriesA,'#6d8dff',0)}${bars(seriesB,'#3ecf8e',bw/2)}${labels}</svg>
-  <div class="row" style="gap:14px;justify-content:center"><span class="legend"><i style="background:#6d8dff"></i>Signups</span><span class="legend"><i style="background:#3ecf8e"></i>Answers</span></div>`;}
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid}${bars(seriesA,'#c2652a',0)}${bars(seriesB,'#e08850',bw/2)}${labels}</svg>
+  <div class="row" style="gap:14px;justify-content:center"><span class="legend"><i style="background:#c2652a"></i>Signups</span><span class="legend"><i style="background:#e08850"></i>Answers</span></div>`;}
 
 async function vAdmin(){nav('admin');
   if(!isAdmin()){setApp('<div class="card center muted">Admin only.</div>');return;}
