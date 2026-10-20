@@ -62,6 +62,28 @@ function nav(active){document.getElementById('navbar').classList.remove('hidden'
   document.body.classList.add('authed');document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('on',a.dataset.nav===active));
   document.getElementById('logoutBtn').classList.remove('hidden');}
 function setApp(html){app.innerHTML=html;}
+async function fetchNotes(){if(S.notes)return S.notes;const{data}=await sb.from('notes').select('id,title,subject_slug,kind,ch,sort,size_bytes,path,is_free').order('sort');S.notes=data||[];return S.notes;}
+const fmtSize=b=>b>=1048576?(b/1048576).toFixed(1)+' MB':Math.max(1,Math.round(b/1024))+' KB';
+const canNote=n=>n.is_free||isPaid();
+const noteRow=n=>{const ok=canNote(n);return `<div class="srow nrow" data-id="${n.id}"><span class="itile t-acc">${svg(ok?'file':'lock')}</span><div class="nm"><b>${esc(n.title)}</b><span class="sub">PDF &middot; ${fmtSize(n.size_bytes)}${n.kind==='volume'?' &middot; Full volume':''}</span></div><span class="tpill ${n.is_free?'t-good':'t-acc'}">${n.is_free?'FREE':'PAID'}</span>${ok?`<button class="btn primary sm nopen" type="button" data-id="${n.id}">Open</button>`:`<span class="btn sm" aria-disabled="true">Locked</span>`}${isAdmin()?`<button class="btn sm nflip" type="button" data-id="${n.id}">${n.is_free?'Make paid':'Make free'}</button>`:''}</div>`;};
+async function openNote(id,dl){const n=(S.notes||[]).find(x=>x.id==id);if(!n)return;if(!canNote(n)){alert('Yeh note paid students ke liye hai. Full access ke liye Topper Haveli admin se contact karo.');return;}
+  const w=dl?null:window.open('','_blank');
+  const{data,error}=await sb.storage.from('notes').createSignedUrl(n.path,600,dl?{download:n.title.replace(/[^\w\- ]+/g,'')+'.pdf'}:undefined);
+  if(error||!data){if(w)w.close();alert('File abhi nahi khul rahi. Thodi der baad try karo.');return;}
+  if(dl){location.href=data.signedUrl;}else if(w){w.location.href=data.signedUrl;}else{location.href=data.signedUrl;}}
+function bindNotes(root){root.querySelectorAll('.nopen').forEach(b=>b.onclick=e=>{e.stopPropagation();openNote(b.dataset.id);});
+  root.querySelectorAll('.nflip').forEach(b=>b.onclick=async e=>{e.stopPropagation();const n=S.notes.find(x=>x.id==b.dataset.id);const{error}=await sb.from('notes').update({is_free:!n.is_free}).eq('id',n.id);if(error){alert(error.message);return;}n.is_free=!n.is_free;const row=b.closest('.nrow');row.outerHTML=noteRow(n);bindNotes(document.getElementById('nlist')||app);});}
+async function vNotes(slug){nav('notes');setApp('<div class="card center muted">Notes load ho rahe hain…</div>');
+  await fetchSubjects();const all=await fetchNotes();
+  const groups=[...(S.subjects||[]).filter(s=>all.some(n=>n.subject_slug===s.slug)).map(s=>({slug:s.slug,name:s.name})),{slug:'law',name:'Business Law'},{slug:'books',name:'Full Books'}];
+  const gOf=n=>n.kind==='volume'&&!n.subject_slug?'books':(n.subject_slug||'law');
+  const cur=slug&&groups.some(g=>g.slug===slug)?slug:'all';
+  const list=all.filter(n=>cur==='all'||gOf(n)===cur||(cur!=='books'&&n.kind==='volume'&&n.subject_slug===cur));
+  const nf=all.filter(n=>n.is_free).length;
+  setApp(`<div class="crumb"><a href="#/home">Dashboard</a> &rsaquo; Study Notes</div><h1 class="h1 sm">Study Notes</h1><p class="lead">Final short-notes PDFs, chapter-wise and as full volumes. ${nf} free, rest for paid students.</p>
+  <div class="row nchips"><a class="chipbtn ${cur==='all'?'on':''}" href="#/notes">All (${all.length})</a>${groups.map(g=>`<a class="chipbtn ${cur===g.slug?'on':''}" href="#/notes/${g.slug}">${esc(g.name)}</a>`).join('')}</div>
+  <div id="nlist" class="mt">${list.map(noteRow).join('')||'<div class="empty">Is section me abhi notes nahi hain.</div>'}</div>`);
+  bindNotes(document.getElementById('nlist'));}
 const subjName=slug=>((S.subjects||[]).find(s=>s.slug===slug)||{}).name||slug;
 
 function vLogin(){document.body.classList.remove('authed');document.getElementById('navbar').classList.add('hidden');document.getElementById('logoutBtn').classList.add('hidden');document.getElementById('userBadge').innerHTML='';
@@ -178,17 +200,20 @@ async function vHome(){nav('home');await fetchSubjects();
   <div class="two wide2"><div><div class="sechead"><h2 class="h2s">${svg('book','o')} Study Subjects</h2><span class="sub">${(S.subjects||[]).length} subjects</span></div>
    <div id="subjList">${(S.subjects||[]).map(s=>{const p=st.per[s.slug];return `<div class="srow subj" data-slug="${s.slug}"><span class="itile t-acc">${svg('file')}</span><div class="nm"><b>${esc(s.name)}</b><span class="sub">${p?p.n+' solved &middot; '+Math.round(100*p.c/p.n)+'% accuracy':(paid?'Full bank':'Free preview: '+s.free_question_count+' Q')}</span></div><span class="tpill ${paid?'t-acc':'t-good'}">${paid?'PAID':'FREE'}</span><span class="go">${svg('arrow')}</span></div>`}).join('')}</div>
    ${!paid?`<div class="card pad unlock"><h3 class="h3">${S.profile&&S.profile.is_paid?'Plan khatam ho gaya':'Unlock full access'}</h3><p class="sub">All 6,000+ questions, unlimited mocks, weak-topic analysis and rank. ${S.profile&&S.profile.is_paid?'Renew ke liye':'Full access ke liye'} Topper Haveli admin se contact karo.</p></div>`:''}</div>
-   <div><div class="sechead"><h2 class="h2s">${svg('clock','o')} Recent Mock Tests</h2><span class="sub">${st.mocks.length} done</span></div>${mocksList(st.mocks)}</div></div>`);
-  document.querySelectorAll('.subj').forEach(d=>d.onclick=()=>{location.hash='#/subject/'+d.dataset.slug;});}
+   <div><div id="notesHome"></div><div class="sechead"><h2 class="h2s">${svg('clock','o')} Recent Mock Tests</h2><span class="sub">${st.mocks.length} done</span></div>${mocksList(st.mocks)}</div></div>`);
+  document.querySelectorAll('.subj').forEach(d=>d.onclick=()=>{location.hash='#/subject/'+d.dataset.slug;});
+  fetchNotes().then(all=>{const box=document.getElementById('notesHome');if(!box||!all.length)return;const pick=all.filter(n=>n.is_free).slice(0,3);
+    box.innerHTML=`<div class="sechead"><h2 class="h2s">${svg('book','o')} Study Notes</h2><a class="sub" href="#/notes">View all ${all.length} &rsaquo;</a></div>${pick.map(noteRow).join('')}`;bindNotes(box);}).catch(()=>{});}
 
 async function vSubject(slug){nav('home');await fetchSubjects();
-  const qs=await fetchQuestions(slug);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;const paid=isPaid();
+  const[qs,allN]=await Promise.all([fetchQuestions(slug),fetchNotes().catch(()=>[])]);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;const paid=isPaid();
+  const nN=allN.filter(n=>n.subject_slug===slug).length;
   const card=(ic,t,sub,cnt,href,btn,dis)=>`<div class="card pad scrd ${dis?'dis':''}"><span class="itile t-acc">${svg(ic)}</span><h3 class="h3">${t}</h3><p class="sub">${sub}</p>${cnt?`<div class="cnt">${cnt}<small> questions</small></div>`:''}${dis?`<span class="btn" aria-disabled="true">${btn}</span>`:`<a class="btn primary" href="${href}">${btn} ${svg('arrow')}</a>`}</div>`;
   setApp(`<div class="crumb"><a href="#/home">Dashboard</a> &rsaquo; ${esc(subjName(slug))}</div><h1 class="h1 sm">${esc(subjName(slug))}</h1><p class="lead">Choose how you want to study. MCQ, previous-year questions and notes are kept separate.</p>
   <div class="trio">
    ${card('list','MCQ Practice','Topic-wise practice questions with explanations.',nM,'#/practice/'+slug+'/Practice',nM?'Start MCQs':'Not in your plan',!nM)}
    ${card('file','Previous Year Questions','Real exam questions from 2018 onwards.',nP,'#/practice/'+slug+'/PYQ',nP?'Start PYQs':'Not in your plan',!nP)}
-   ${card('book','Study Notes','Short notes and revision material.',null,'#','Coming soon',true)}
+   ${card('book','Study Notes','Short notes and revision material (PDF).',nN?nN+'<small> files</small>':null,'#/notes/'+slug,nN?'Open Notes':'Coming soon',!nN).replace('<small> questions</small>','')}
    ${card('clock','Mock Test',paid?'Timed test, choose your size.':'1 free timed mock for this subject.',null,'#/mocksetup/'+slug,'Start Mock')}
   </div>`);}
 
@@ -587,6 +612,7 @@ async function route(){const h=location.hash||'#/home';
   if(view==='mocksetup')return vMockSetup(arg);
   if(view==='mockrun')return vMockRun(arg);
   if(view==='mockreview')return vMockReview(arg);
+  if(view==='notes')return vNotes(arg);
   if(view==='dashboard')return vDashboard();
   if(view==='admin')return vAdmin();
   return vHome();}
