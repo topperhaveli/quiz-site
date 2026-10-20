@@ -312,6 +312,7 @@ async function vMockRun(id){nav('home');
   const byId={};(qs||[]).forEach(q=>byId[q.id]=q);
   const list=ids.map(i=>byId[i]).filter(Boolean);
   if(m.status==='completed'){renderResult(m,list);return;}
+  if(list.length<ids.length){setApp(`<div class="card center"><h2>Access change hua hai</h2><p class="muted">Is mock ke ${ids.length} me se ${ids.length-list.length} questions abhi tumhare plan me khule nahi hain, isliye mock ko chhota karke nahi chalaya ja raha. Tumhara progress save hai. Plan wapas active hone par ye mock wahin se chalega.</p><a class="btn block" href="#/home">Home</a></div>`);return;}
   let st=m.state||{answers:{},idx:0,ends_at:Date.now()+list.length*60*1000};
   st.answers=st.answers||{};st.idx=st.idx||0;
   if(!st.ends_at){st.ends_at=Date.now()+list.length*60*1000;}
