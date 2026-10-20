@@ -442,12 +442,14 @@ async function vAdmin(openId){nav('admin');
   if(e1||e2){setApp(`<div class="card center"><h3>Load nahi hua</h3><p class="muted">${esc((e1||e2).message)}</p></div>`);return;}
   const defDays=S.config.paid_validity_days||120;
   let q='',filter='all',sel=new Set(),detailId=null;
-  let ops={anns:[],doubts:[],hard:[]};
+  let ops={anns:[],doubts:[],hard:[],batches:[],members:[]};
   async function loadOps(){
     const[a,d,h]=await Promise.all([
-      sb.from('announcements').select('id,title,body,pinned,expires_at,created_at').order('created_at',{ascending:false}).limit(20),
+      sb.from('announcements').select('id,title,body,pinned,expires_at,created_at,batch_id').order('created_at',{ascending:false}).limit(20),
       sb.from('doubts').select('id,user_id,subject_slug,question_id,body,status,reply,created_at').order('created_at',{ascending:false}).limit(40),
       sb.rpc('admin_hardest_questions',{p_min:5})]);
+    const[bb,bm]=await Promise.all([sb.from('batches').select('id,name,subjects').order('created_at'),sb.from('batch_members').select('batch_id,user_id')]);
+    ops.batches=bb.data||[];ops.members=bm.data||[];
     ops.anns=a.data||[];ops.doubts=d.data||[];ops.hard=h.data||[];}
   await loadOps();
   const uname=id=>{const u=students.find(x=>x.id===id);return u?(u.display_name||u.email||'student'):'student';};
@@ -506,11 +508,17 @@ async function vAdmin(openId){nav('admin');
       ${ops.doubts.filter(d=>!d.reply).slice(0,10).map(d=>`<div class="planbox" data-doubt="${d.id}"><p class="muted small" style="margin:0">${esc(uname(d.user_id))} · ${esc(subjName(d.subject_slug))} · ${fmtAgo(d.created_at)}</p><p style="white-space:pre-wrap;margin:4px 0">${esc(d.body)}</p>
         <textarea rows="2" placeholder="Jawab likho" data-dreply="${d.id}"></textarea><div class="row mt"><button class="chipbtn on" data-dsend="${d.id}" type="button">Jawab bhejo</button></div></div>`).join('')||'<p class="muted">Koi open doubt nahi.</p>'}
     </div>
+    <div class="card"><h3>Batches</h3><p class="muted small">Batch ko jo subjects doge, wo us batch ke students ke liye poore khulenge (individual access ke upar). Koi student apne aap batch me nahi jata. Student detail se add karo.</p>
+      ${ops.batches.map(b=>`<div class="planbox"><div class="row"><b style="flex:1">${esc(b.name)}</b><span class="muted small">${ops.members.filter(m=>m.batch_id===b.id).length} students</span><button class="chipbtn" data-bdel="${b.id}" type="button">Hatao</button></div><p class="muted small" style="margin:4px 0 0">${(b.subjects||[]).map(x=>esc(subjName(x))).join(', ')||'Koi subject nahi'}</p></div>`).join('')||'<p class="muted">Abhi koi batch nahi.</p>'}
+      <input id="bName" placeholder="Naya batch ka naam" maxlength="60">
+      <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:8px">${S.subjects.map(x=>`<label class="chipbtn" style="cursor:pointer"><input type="checkbox" data-bsub="${x.slug}" style="margin-right:6px">${esc(x.name)}</label>`).join('')}</div>
+      <div class="row mt" style="gap:8px"><button class="btn primary" id="bAdd" type="button">Batch banao</button><span class="muted small" id="bMsg"></span></div>
+    </div>
     <div class="card"><h3>Notice board</h3><p class="muted small">Yahan likha notice saare students ke home par dikhta hai. Post karne se pehle ek baar padh lo.</p>
       <input id="anTitle" placeholder="Title" maxlength="120"><textarea id="anBody" rows="2" placeholder="Detail (optional)" maxlength="600"></textarea>
-      <div class="row mt" style="gap:8px;flex-wrap:wrap"><label class="chipbtn" style="cursor:pointer"><input type="checkbox" id="anPin" style="margin-right:6px">Pin</label><input id="anDays" type="number" min="1" placeholder="Din baad hatao" style="width:130px;padding:7px;margin:0"><button class="btn primary" id="anPost" type="button">Post</button></div>
+      <div class="row mt" style="gap:8px;flex-wrap:wrap"><label class="chipbtn" style="cursor:pointer"><input type="checkbox" id="anPin" style="margin-right:6px">Pin</label><select id="anBatch" style="width:auto"><option value="">Sab students</option>${ops.batches.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select><input id="anDays" type="number" min="1" placeholder="Din baad hatao" style="width:130px;padding:7px;margin:0"><button class="btn primary" id="anPost" type="button">Post</button></div>
       <div class="notice hidden" id="anMsg"></div>
-      ${ops.anns.map(a=>`<div class="row" style="padding:7px 0;border-bottom:1px solid var(--line);gap:8px"><span style="flex:1"><b>${a.pinned?'<span class="badge warn">PINNED</span> ':''}${esc(a.title)}</b><br><span class="muted small">${new Date(a.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}${a.expires_at?' · till '+new Date(a.expires_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):''}</span></span><button class="chipbtn" data-andel="${a.id}" type="button">Hatao</button></div>`).join('')}
+      ${ops.anns.map(a=>`<div class="row" style="padding:7px 0;border-bottom:1px solid var(--line);gap:8px"><span style="flex:1"><b>${a.pinned?'<span class="badge warn">PINNED</span> ':''}${a.batch_id?'<span class="badge">'+esc((ops.batches.find(b=>b.id===a.batch_id)||{name:'batch'}).name)+'</span> ':''}${esc(a.title)}</b><br><span class="muted small">${new Date(a.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}${a.expires_at?' · till '+new Date(a.expires_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):''}</span></span><button class="chipbtn" data-andel="${a.id}" type="button">Hatao</button></div>`).join('')}
     </div>
     <div class="card"><h3>Sabse mushkil questions</h3><p class="muted small">Kam se kam 5 attempts wale questions, sabse kam accuracy pehle. Class me discuss karne ke liye.</p>
       ${ops.hard.map(h=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><div class="row"><span class="muted small" style="flex:1">${esc(subjName(h.subject_slug))}</span><span class="badge ${h.pct<40?'warn':''}">${h.pct}% · ${h.n} attempts</span></div><div class="small">${esc(h.q)}</div></div>`).join('')||'<p class="muted">Abhi kaafi attempts nahi hain.</p>'}
@@ -537,13 +545,17 @@ async function vAdmin(openId){nav('admin');
 
   function wire(){
     document.getElementById('aRefresh').onclick=async()=>{setApp('<div class="card center muted">Refreshing…</div>');await refreshStudents();await loadOps();render();};
+    document.getElementById('bAdd').onclick=async()=>{const m=document.getElementById('bMsg');const name=document.getElementById('bName').value.trim();if(!name){m.textContent='Naam likho.';return;}
+      const subjects=[...document.querySelectorAll('[data-bsub]')].filter(c=>c.checked).map(c=>c.dataset.bsub);
+      const{error}=await sb.from('batches').insert({name,subjects});if(error){m.textContent=error.message;return;}await loadOps();render();};
+    document.querySelectorAll('[data-bdel]').forEach(b=>b.onclick=async()=>{if(!confirm('Batch hatayein? Students ka apna access nahi badlega, sirf batch se mila access hatega.'))return;await sb.from('batches').delete().eq('id',b.dataset.bdel);await loadOps();render();});
     document.getElementById('csvB').onclick=()=>csvStudents(filteredStudents());
     document.querySelectorAll('[data-dsend]').forEach(b=>b.onclick=async()=>{const id=b.dataset.dsend;const t=document.querySelector('[data-dreply="'+id+'"]').value.trim();if(!t)return;
       const{error}=await sb.from('doubts').update({reply:t,status:'answered',replied_at:new Date().toISOString()}).eq('id',id);if(error){alert(error.message);return;}await loadOps();render();});
     document.querySelectorAll('[data-andel]').forEach(b=>b.onclick=async()=>{if(!confirm('Ye notice hata dein?'))return;await sb.from('announcements').delete().eq('id',b.dataset.andel);await loadOps();render();});
     document.getElementById('anPost').onclick=async()=>{const m=document.getElementById('anMsg');const title=document.getElementById('anTitle').value.trim();if(!title){m.textContent='Title likho.';m.classList.remove('hidden');return;}
       const days=Number(document.getElementById('anDays').value)||0;
-      const{error}=await sb.from('announcements').insert({title,body:document.getElementById('anBody').value.trim(),pinned:document.getElementById('anPin').checked,expires_at:days?new Date(Date.now()+days*86400000).toISOString():null});
+      const{error}=await sb.from('announcements').insert({title,body:document.getElementById('anBody').value.trim(),pinned:document.getElementById('anPin').checked,batch_id:document.getElementById('anBatch').value||null,expires_at:days?new Date(Date.now()+days*86400000).toISOString():null});
       if(error){m.textContent=error.message;m.classList.remove('hidden');return;}await loadOps();render();};
     document.getElementById('aSearch').oninput=e=>{q=e.target.value;render();const el=document.getElementById('aSearch');el.focus();el.setSelectionRange(el.value.length,el.value.length);};
     document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;sel.clear();render();});
@@ -623,6 +635,7 @@ async function vAdmin(openId){nav('admin');
       </div>
       <div class="notice hidden" id="dMsg"></div></div>
     <div class="card"><h3>Plan history</h3><div id="pHist" class="muted small">Load ho raha hai…</div></div>
+    <div class="card"><h3>Batches</h3>${ops.batches.length?`<div class="row" style="flex-wrap:wrap;gap:8px">${ops.batches.map(b=>`<label class="chipbtn ${ops.members.some(m=>m.batch_id===b.id&&m.user_id===u.id)?'on':''}" style="cursor:pointer"><input type="checkbox" data-bm="${b.id}" ${ops.members.some(m=>m.batch_id===b.id&&m.user_id===u.id)?'checked':''} style="margin-right:6px">${esc(b.name)}</label>`).join('')}</div><div class="row mt" style="gap:8px"><button class="btn primary" id="bmSave" type="button">Save batches</button><span class="muted small" id="bmMsg"></span></div>`:'<p class="muted small">Pehle upar Admin page par batch banao.</p>'}</div>
     <div class="card"><h3>Private note</h3><p class="muted small">Sirf admin ko dikhta hai (batch, parent ka number, follow-up).</p><textarea id="snT" rows="3" maxlength="1000" placeholder="Note likho"></textarea><div class="row mt" style="gap:8px"><button class="btn primary" id="snSave" type="button">Save note</button><span class="muted small" id="snMsg"></span></div></div>
     <div class="statgrid">
       ${statCard(d.answers,'Answers')}
@@ -672,6 +685,11 @@ async function vAdmin(openId){nav('admin');
       if(error){note(error.message);return;}
       note('Access revoke ho gaya (free pe aa gaya).',true);renderDetail();refreshStudents();};
     sb.from('student_notes').select('note').eq('user_id',u.id).maybeSingle().then(({data:n})=>{const t=document.getElementById('snT');if(t&&n)t.value=n.note||'';});
+    {const bs=document.getElementById('bmSave');if(bs)bs.onclick=async()=>{const m=document.getElementById('bmMsg');
+      for(const c of document.querySelectorAll('[data-bm]')){const has=ops.members.some(x=>x.batch_id===c.dataset.bm&&x.user_id===u.id);
+        if(c.checked&&!has){const{error}=await sb.from('batch_members').insert({batch_id:c.dataset.bm,user_id:u.id});if(error){m.textContent=error.message;return;}}
+        if(!c.checked&&has){const{error}=await sb.from('batch_members').delete().eq('batch_id',c.dataset.bm).eq('user_id',u.id);if(error){m.textContent=error.message;return;}}}
+      await loadOps();m.textContent='Saved.';};}
     document.getElementById('snSave').onclick=async()=>{const m=document.getElementById('snMsg');const{error}=await sb.from('student_notes').upsert({user_id:u.id,note:document.getElementById('snT').value,updated_at:new Date().toISOString()});m.textContent=error?error.message:'Saved.';};
     sb.rpc('admin_plan_history',{p_id:u.id}).then(({data:hist})=>{
       const el=document.getElementById('pHist');if(!el)return;
