@@ -172,6 +172,20 @@ function analyticsBlock(st){const nm=st.mocks.length;
    <div class="card pad"><h3 class="h3">Subject-Wise Accuracy &amp; Mastery</h3><p class="sub">From your practice answers</p>${masteryRows(st)||'<div class="empty">Practice karo, subject-wise accuracy yahan dikhegi.</div>'}</div></div>`;}
 function mocksList(mocks){return (mocks||[]).slice(0,4).map(mk=>{const p=mk.total?Math.round(100*mk.score/mk.total):0,t=tier(p);return `<a class="mcard b-${t[2]||'o'}" href="#/mockreview/${mk.id}"><div class="mtop"><b>${esc(subjName(mk.subject_slug))}</b><span class="tpill ${t[1]}">${mk.score}/${mk.total}</span></div><div class="sub">${(mk.completed_at||'').slice(0,10)} &middot; ${p}% &middot; View review &rsaquo;</div></a>`}).join('')||'<div class="empty">Abhi koi mock complete nahi hua.</div>';}
 
+const COURSES=[
+ {id:'accounting',name:'Accounting',icon:'file',slugs:['accounting','financial-accounting','corporate-accounting','cost-accounting','management-accounting','auditing','income-tax','gst-taxation']},
+ {id:'rajasthan',name:'Rajasthan',icon:'target',slugs:['rajasthan-gk','rajasthan-history','rajasthan-geography','rajasthan-art-culture']},
+ {id:'maths-reasoning',name:'Maths & Reasoning',icon:'target',slugs:['mathematics','reasoning']},
+ {id:'computer',name:'Computer',icon:'list',slugs:['computer-awareness']},
+ {id:'india-gk',name:'India GK',icon:'book',slugs:['general-knowledge','general-science']},
+ {id:'language',name:'Language',icon:'book',slugs:['hindi','english']}];
+const courseSubjects=c=>c.slugs.map(sl=>(S.subjects||[]).find(x=>x.slug===sl)).filter(Boolean);
+async function vCourse(id){nav('home');await fetchSubjects();const c=COURSES.find(x=>x.id===id);
+  if(!c){location.hash='#/home';return;}
+  const st=await loadStats().catch(()=>({per:{}}));const subs=courseSubjects(c);
+  setApp(`<div class="crumb"><a href="#/home">Dashboard</a> &rsaquo; Courses &rsaquo; ${esc(c.name)}</div><h1 class="h1 sm">${esc(c.name)}</h1>
+  <div>${subs.map(s=>{const p=(st.per||{})[s.slug];const full=hasFull(s.slug);return `<a class="srow" style="text-decoration:none;color:inherit" href="#/subject/${s.slug}"><span class="itile t-acc">${svg('file')}</span><div class="nm"><b>${esc(s.name)}</b><span class="sub">${p?p.n+' solved &middot; '+Math.round(100*p.c/p.n)+'% accuracy':(full?'Full bank':'Free preview: '+s.free_question_count+' Q')}</span></div><span class="tpill ${full?'t-acc':'t-good'}">${full?'FULL':'FREE PREVIEW'}</span><span class="go">&rsaquo;</span></a>`;}).join('')}</div>
+  <a class="btn block mt" href="#/notes">Study Notes</a><a class="btn block mt" href="#/home">Back to dashboard</a>`);}
 async function vHome(){nav('home');await fetchSubjects();
   const paid=isPaid();
   const note=localStorage.getItem('portal_import_note');if(note)localStorage.removeItem('portal_import_note');
@@ -208,10 +222,9 @@ async function vHome(){nav('home');await fetchSubjects();
   <div class="two wide"><div class="card pad resume">${resume}</div>
    <div class="card pad"><div class="mastery">${mr||'<div class="empty">Subject mastery yahan dikhega, jaise hi tum practice shuru karoge.</div>'}</div><div class="rfoot"><span class="rmeta">${paid?'Unlimited mocks':'1 free mock per subject'}</span><a class="btn dark" href="${mockTo}">Start a Mock ${svg('arrow')}</a></div></div></div>
   ${analyticsBlock(st)}
-  <div class="two wide2"><div>   <div class="sechead"><h2 class="h2s">${svg('target','o')} Rajasthan Special</h2><span class="sub">4 sections</span></div>
-   <div id="rajList">${[['Rajasthan GK','Previous-year papers: RAS, Sub-Inspector, Senior Teacher.','rajasthan-gk'],['Rajasthan History','MCQs and previous-year questions.','rajasthan-history'],['Rajasthan Geography','MCQs and previous-year questions.','rajasthan-geography'],['Rajasthan Art & Culture','MCQs and previous-year questions.','rajasthan-art-culture']].map(r=>{const full=hasFull(r[2]);return `<a class="srow" style="text-decoration:none;color:inherit" href="#/subject/${r[2]}"><span class="itile t-acc">${svg('target')}</span><div class="nm"><b>${r[0]}</b><span class="sub">${r[1]}</span></div><span class="tpill ${full?'t-acc':'t-good'}">${full?'FULL ACCESS':'FREE PREVIEW'}</span></a>`}).join('')}</div>
-<div class="sechead"><h2 class="h2s">${svg('book','o')} Study Subjects</h2><span class="sub">${(S.subjects||[]).length} subjects</span></div>
-   <div id="subjList">${(S.subjects||[]).filter(s=>!/^rajasthan-/.test(s.slug)).map(s=>{const p=st.per[s.slug];return `<div class="srow subj" data-slug="${s.slug}"><span class="itile t-acc">${svg('file')}</span><div class="nm"><b>${esc(s.name)}</b><span class="sub">${p?p.n+' solved &middot; '+Math.round(100*p.c/p.n)+'% accuracy':(paid?'Full bank':'Free preview: '+s.free_question_count+' Q')}</span></div><span class="tpill ${paid?'t-acc':'t-good'}">${paid?'PAID':'FREE'}</span><span class="go">${svg('arrow')}</span></div>`}).join('')}</div>
+  <div class="two wide2"><div>   <div class="sechead"><h2 class="h2s">${svg('book','o')} Courses</h2><span class="sub">${COURSES.length} courses</span></div>
+   <div id="courseList">${COURSES.map(c=>{const subs=courseSubjects(c);if(!subs.length)return '';const solved=subs.reduce((n,x)=>n+((st.per[x.slug]||{}).n||0),0);const full=subs.filter(x=>hasFull(x.slug)).length;
+     return `<a class="srow course" style="text-decoration:none;color:inherit" href="#/course/${c.id}"><span class="itile t-acc">${svg(c.icon)}</span><div class="nm"><b>${esc(c.name)}</b><span class="sub">${subs.length} ${subs.length>1?'subjects':'subject'}${solved?' &middot; '+solved+' solved':''}</span></div><span class="tpill ${full===subs.length?'t-acc':'t-good'}">${full===subs.length?'FULL ACCESS':'OPEN'}</span><span class="go">&rsaquo;</span></a>`;}).join('')}</div>
    ${!paid?`<div class="card pad unlock"><h3 class="h3">${S.profile&&S.profile.is_paid?'Plan khatam ho gaya':'Unlock full access'}</h3><p class="sub">All 6,000+ questions, unlimited mocks, weak-topic analysis and rank. ${S.profile&&S.profile.is_paid?'Renew ke liye':'Full access ke liye'} Topper Haveli admin se contact karo.</p></div>`:''}</div>
    <div><div id="notesHome"></div><div class="sechead"><h2 class="h2s">${svg('clock','o')} Recent Mock Tests</h2><span class="sub">${st.mocks.length} done</span></div>${mocksList(st.mocks)}</div></div>`);
   document.querySelectorAll('.subj').forEach(d=>d.onclick=()=>{location.hash='#/subject/'+d.dataset.slug;});
@@ -692,6 +705,7 @@ async function route(){const h=location.hash||'#/home';
   if(view==='mockreview')return vMockReview(arg);
   if(view==='notes')return vNotes(arg);
   if(view==='doubts')return vDoubts();
+  if(view==='course')return vCourse(arg);
   if(view==='dashboard')return vDashboard();
   if(view==='admin')return vAdmin(arg==='student'?parts[3]:null);
   return vHome();}
