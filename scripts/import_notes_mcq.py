@@ -7,6 +7,12 @@ The export stays local. This script does not deploy or change any repository rem
 Existing IDs and answer order are retained; source text is refreshed from the export.
 Run the UI checks and review the diff before committing the generated files.
 """
+# PUBLIC PUBLISH DISABLED 2026-10-20: static public question banks were removed from the site.
+# All public content now lives behind the access-controlled portal.
+# Private extraction/handoff builds only: set RAJA_PRIVATE_BUILD=1 and write output outside docs/.
+import os as _os, sys as _sys
+if _os.environ.get("RAJA_PRIVATE_BUILD") != "1":
+    _sys.exit("disabled: public bank generation removed. Set RAJA_PRIVATE_BUILD=1 for private extraction builds only.")
 import argparse, collections, hashlib, html, json, pathlib, re
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCS = ROOT / 'docs'
