@@ -179,3 +179,7 @@ td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
 
 .nrow .btn.sm{padding:7px 12px;font-size:12px;min-height:0;white-space:nowrap}.nrow{flex-wrap:wrap}.nchips{flex-wrap:wrap;gap:8px}.nchips .chipbtn{text-decoration:none;display:inline-block}
 @media(max-width:640px){.nrow .nm{flex-basis:calc(100% - 120px)}}
+
+#app [id]{scroll-margin-top:84px}.wrap{scroll-padding-top:84px}
+@media(max-width:1023px){.wrap{padding-bottom:120px}}
+html{scroll-padding-top:84px}
