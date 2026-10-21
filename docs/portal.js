@@ -72,7 +72,7 @@ async function openNote(id,dl){const n=(S.notes||[]).find(x=>x.id==id);if(!n)ret
   const w=dl?null:window.open('','_blank');
   const{data,error}=await sb.storage.from('notes').createSignedUrl(n.path,600,dl?{download:n.title.replace(/[^\w\- ]+/g,'')+'.pdf'}:undefined);
   if(error||!data){if(w)w.close();alert('File abhi nahi khul rahi. Thodi der baad try karo.');return;}
-  if(dl){location.href=data.signedUrl;}else{const v='./pdfview.html?u='+encodeURIComponent(data.signedUrl)+'&t='+encodeURIComponent(n.title);if(w){w.location.href=v;}else{location.href=v;}}}
+  if(dl){location.href=data.signedUrl;}else{const v='./pdfview.html#u='+encodeURIComponent(data.signedUrl)+'&t='+encodeURIComponent(n.title);if(w){w.location.href=v;}else{location.href=v;}}}
 function bindNotes(root){root.querySelectorAll('.nopen').forEach(b=>b.onclick=e=>{e.stopPropagation();openNote(b.dataset.id);});
   root.querySelectorAll('.ndl').forEach(b=>b.onclick=e=>{e.stopPropagation();openNote(b.dataset.id,true);});
   root.querySelectorAll('.nflip').forEach(b=>b.onclick=async e=>{e.stopPropagation();const n=S.notes.find(x=>x.id==b.dataset.id);const{error}=await sb.from('notes').update({is_free:!n.is_free}).eq('id',n.id);if(error){alert(error.message);return;}n.is_free=!n.is_free;const row=b.closest('.nrow');row.outerHTML=noteRow(n);bindNotes(document.getElementById('nlist')||app);});}

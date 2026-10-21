@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
 <title>Notes · Topper Haveli</title>
 <style>
 body{margin:0;background:#525659;font-family:system-ui,-apple-system,sans-serif}
@@ -23,7 +24,8 @@ canvas.ph{min-height:55vh;width:100%;max-width:820px;background:#e8e8e8;box-shad
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 <script>
 (function(){
-var q=new URLSearchParams(location.search),u=q.get('u'),t=q.get('t')||'Notes';
+var h=location.hash&&location.hash.length>1?location.hash.slice(1):location.search.slice(1);
+var q=new URLSearchParams(h),u=q.get('u'),t=q.get('t')||'Notes';
 document.title=t+' · Topper Haveli';
 document.getElementById('ttl').textContent=t;
 var msg=document.getElementById('msg');
