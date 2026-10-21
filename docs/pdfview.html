@@ -21,7 +21,7 @@ canvas.ph{min-height:55vh;width:100%;max-width:820px;background:#e8e8e8;box-shad
 <div id="bar"><a href="portal.html#/notes/all">&larr; Back</a><span id="ttl"></span><span id="cnt"></span></div>
 <div id="msg">PDF load ho raha hai…</div>
 <div id="pg"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="./vendor/pdf.min.js"></script>
 <script>
 (function(){
 var h=location.hash&&location.hash.length>1?location.hash.slice(1):location.search.slice(1);
@@ -30,7 +30,7 @@ document.title=t+' · Topper Haveli';
 document.getElementById('ttl').textContent=t;
 var msg=document.getElementById('msg');
 if(!u||u.indexOf('https://jvvnl-quiz-api.crypticfiles40.workers.dev/')!==0){msg.textContent='Link sahi nahi hai ya expire ho gaya. Portal se dobara Open dabao.';return;}
-pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc='./vendor/pdf.worker.min.js';
 pdfjsLib.getDocument({url:u}).promise.then(function(pdf){
   document.getElementById('cnt').textContent=pdf.numPages+' pages';
   var pg=document.getElementById('pg');
