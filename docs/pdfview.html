@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Notes · Topper Haveli</title>
+<style>
+body{margin:0;background:#525659;font-family:system-ui,-apple-system,sans-serif}
+#bar{position:sticky;top:0;z-index:5;background:#323639;color:#fff;padding:10px 14px;display:flex;gap:14px;align-items:center;font-size:14px}
+#bar a{color:#ffd9a8;text-decoration:none;white-space:nowrap}
+#ttl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#cnt{white-space:nowrap;color:#cfd3d8}
+#msg{color:#fff;text-align:center;padding:48px 20px;line-height:1.6}
+#pg{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px}
+canvas{max-width:100%;height:auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.45)}
+canvas.ph{min-height:55vh;width:100%;max-width:820px;background:#e8e8e8;box-shadow:none}
+</style>
+</head>
+<body>
+<div id="bar"><a href="portal.html#/notes/all">&larr; Back</a><span id="ttl"></span><span id="cnt"></span></div>
+<div id="msg">PDF load ho raha hai…</div>
+<div id="pg"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script>
+(function(){
+var q=new URLSearchParams(location.search),u=q.get('u'),t=q.get('t')||'Notes';
+document.title=t+' · Topper Haveli';
+document.getElementById('ttl').textContent=t;
+var msg=document.getElementById('msg');
+if(!u||u.indexOf('https://jvvnl-quiz-api.crypticfiles40.workers.dev/')!==0){msg.textContent='Link sahi nahi hai ya expire ho gaya. Portal se dobara Open dabao.';return;}
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+pdfjsLib.getDocument({url:u}).promise.then(function(pdf){
+  document.getElementById('cnt').textContent=pdf.numPages+' pages';
+  var pg=document.getElementById('pg');
+  msg.textContent='Pehla page aa raha hai…';
+  function draw(c){
+    if(c.dataset.done)return Promise.resolve();c.dataset.done='1';
+    var i=+c.dataset.p;
+    return pdf.getPage(i).then(function(page){
+      var base=page.getViewport({scale:1});
+      var w=Math.min(document.documentElement.clientWidth-24,860);
+      var scale=(w/base.width)*(window.devicePixelRatio>1?1.7:1.25);
+      if(scale>3)scale=3;
+      var vp=page.getViewport({scale:scale});
+      c.width=vp.width;c.height=vp.height;c.classList.remove('ph');c.style.minHeight='0';
+      return page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+    }).then(function(){ if(+c.dataset.p===1){msg.style.display='none';} });
+  }
+  var obs;
+  if('IntersectionObserver' in window){
+    obs=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){draw(x.target);}});},{rootMargin:'900px 0px'});
+  }
+  for(var i=1;i<=pdf.numPages;i++){
+    var c=document.createElement('canvas');c.dataset.p=i;c.className='ph';pg.appendChild(c);
+    if(obs){obs.observe(c);} 
+  }
+  if(!obs){var p=Promise.resolve();for(var j=1;j<=pdf.numPages;j++){(function(cc){p=p.then(function(){return draw(cc);});})(pg.children[j-1]);}}
+  // ensure first page renders even if observer fires late
+  if(pg.children[0])draw(pg.children[0]);
+  if(pg.children[1])draw(pg.children[1]);
+  if(pg.children[2])draw(pg.children[2]);
+}).catch(function(e){
+  msg.textContent='PDF abhi nahi khul paya. Link expire ho sakta hai - portal par wapas jakar dobara Open dabao, ya Download try karo.';
+});
+})();
+</script>
+</body>
+</html>

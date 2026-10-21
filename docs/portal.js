@@ -67,13 +67,14 @@ async function fetchNotes(){if(S.notes)return S.notes;const{data}=await sb.from(
 const fmtSize=b=>b>=1048576?(b/1048576).toFixed(1)+' MB':Math.max(1,Math.round(b/1024))+' KB';
 const hasFull=slug=>isPaid()||(S.access||[]).includes(slug);
 const canNote=n=>n.is_free||isPaid()||(S.access||[]).includes('notes');
-const noteRow=n=>{const ok=canNote(n);return `<div class="srow nrow" data-id="${n.id}"><span class="itile t-acc">${svg(ok?'file':'lock')}</span><div class="nm"><b>${esc(n.title)}</b><span class="sub">PDF &middot; ${fmtSize(n.size_bytes)}${n.kind==='volume'?' &middot; Full volume':''}</span></div><span class="tpill ${n.is_free?'t-good':'t-acc'}">${n.is_free?'FREE':'PAID'}</span>${ok?`<button class="btn primary sm nopen" type="button" data-id="${n.id}">Open</button>`:`<span class="btn sm" aria-disabled="true">Locked</span>`}${isAdmin()?`<button class="btn sm nflip" type="button" data-id="${n.id}">${n.is_free?'Make paid':'Make free'}</button>`:''}</div>`;};
+const noteRow=n=>{const ok=canNote(n);return `<div class="srow nrow" data-id="${n.id}"><span class="itile t-acc">${svg(ok?'file':'lock')}</span><div class="nm"><b>${esc(n.title)}</b><span class="sub">PDF &middot; ${fmtSize(n.size_bytes)}${n.kind==='volume'?' &middot; Full volume':''}</span></div><span class="tpill ${n.is_free?'t-good':'t-acc'}">${n.is_free?'FREE':'PAID'}</span>${ok?`<button class="btn primary sm nopen" type="button" data-id="${n.id}">Open</button><button class="btn sm ndl" type="button" data-id="${n.id}" title="Download PDF">&#8681;</button>`:`<span class="btn sm" aria-disabled="true">Locked</span>`}${isAdmin()?`<button class="btn sm nflip" type="button" data-id="${n.id}">${n.is_free?'Make paid':'Make free'}</button>`:''}</div>`;};
 async function openNote(id,dl){const n=(S.notes||[]).find(x=>x.id==id);if(!n)return;if(!canNote(n)){alert('Yeh note paid students ke liye hai. Full access ke liye Topper Haveli admin se contact karo.');return;}
   const w=dl?null:window.open('','_blank');
   const{data,error}=await sb.storage.from('notes').createSignedUrl(n.path,600,dl?{download:n.title.replace(/[^\w\- ]+/g,'')+'.pdf'}:undefined);
   if(error||!data){if(w)w.close();alert('File abhi nahi khul rahi. Thodi der baad try karo.');return;}
-  if(dl){location.href=data.signedUrl;}else if(w){w.location.href=data.signedUrl;}else{location.href=data.signedUrl;}}
+  if(dl){location.href=data.signedUrl;}else{const v='./pdfview.html?u='+encodeURIComponent(data.signedUrl)+'&t='+encodeURIComponent(n.title);if(w){w.location.href=v;}else{location.href=v;}}}
 function bindNotes(root){root.querySelectorAll('.nopen').forEach(b=>b.onclick=e=>{e.stopPropagation();openNote(b.dataset.id);});
+  root.querySelectorAll('.ndl').forEach(b=>b.onclick=e=>{e.stopPropagation();openNote(b.dataset.id,true);});
   root.querySelectorAll('.nflip').forEach(b=>b.onclick=async e=>{e.stopPropagation();const n=S.notes.find(x=>x.id==b.dataset.id);const{error}=await sb.from('notes').update({is_free:!n.is_free}).eq('id',n.id);if(error){alert(error.message);return;}n.is_free=!n.is_free;const row=b.closest('.nrow');row.outerHTML=noteRow(n);bindNotes(document.getElementById('nlist')||app);});}
 async function vNotes(slug){nav('notes');setApp('<div class="card center muted">Notes load ho rahe hain…</div>');
   await fetchSubjects();const all=await fetchNotes();
