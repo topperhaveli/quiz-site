@@ -32,6 +32,7 @@ const qLabel=q=>{if(!isPYQ(q))return 'Practice';const s=String(q.source||'');if(
   ex=ex.split(/\s*\|\s*|\s+Also from/i)[0].trim();
   if(!ex||ex.length>34)return 'PYQ';return ex+' '+y[1];};
 const isAdmin=()=>!!(S.profile&&S.profile.is_admin);
+const withTimeout=(p,ms,label)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout: '+(label||'request'))),ms))]);
 
 async function fetchProfile(){const{data}=await sb.from('profiles').select('*').eq('id',S.session.user.id).single();{const o=S.profile;if(o&&data&&(o.is_paid!==data.is_paid||o.paid_until!==data.paid_until||o.access_scope!==data.access_scope))S.qcache={};}S.profile=data;
   document.getElementById('navAdmin').classList.toggle('hidden',!isAdmin());['navAdmin2','sAdminLbl'].forEach(i=>{const e=document.getElementById(i);if(e)e.classList.toggle('hidden',!isAdmin());});
@@ -63,16 +64,19 @@ function nav(active){document.getElementById('navbar').classList.remove('hidden'
   document.body.classList.add('authed');document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('on',a.dataset.nav===active));
   document.getElementById('logoutBtn').classList.remove('hidden');}
 function setApp(html){app.innerHTML=html;}
-async function fetchNotes(){if(S.notes)return S.notes;const{data}=await sb.from('notes').select('id,title,subject_slug,kind,ch,sort,size_bytes,path,is_free').order('sort');S.notes=data||[];return S.notes;}
+function renumberNotes(list){const groups={};
+  list.forEach(n=>{if(n.kind!=='chapter')return;const g=n.subject_slug||'law';(groups[g]=groups[g]||[]).push(n);});
+  Object.values(groups).forEach(gn=>{gn.sort((a,b)=>(a.sort||0)-(b.sort||0));gn.forEach((n,i)=>{n.dtitle=String(n.title||'').replace(/^Ch\s*\d+[A-Z]?\s*-\s*/,'Ch '+(i+1)+' - ');});});}
+async function fetchNotes(){if(S.notes)return S.notes;const{data}=await sb.from('notes').select('id,title,subject_slug,kind,ch,sort,size_bytes,path,is_free').order('sort');S.notes=data||[];renumberNotes(S.notes);return S.notes;}
 const fmtSize=b=>b>=1048576?(b/1048576).toFixed(1)+' MB':Math.max(1,Math.round(b/1024))+' KB';
 const hasFull=slug=>isPaid()||(S.access||[]).includes(slug);
 const canNote=n=>n.is_free||isPaid()||(S.access||[]).includes('notes');
-const noteRow=n=>{const ok=canNote(n);return `<div class="srow nrow" data-id="${n.id}"><span class="itile t-acc">${svg(ok?'file':'lock')}</span><div class="nm"><b>${esc(n.title)}</b><span class="sub">PDF &middot; ${fmtSize(n.size_bytes)}${n.kind==='volume'?' &middot; Full volume':''}</span></div><span class="tpill ${n.is_free?'t-good':'t-acc'}">${n.is_free?'FREE':'PAID'}</span>${ok?`<button class="btn primary sm nopen" type="button" data-id="${n.id}">Open</button><button class="btn sm ndl" type="button" data-id="${n.id}" title="Download PDF">&#8681;</button>`:`<span class="btn sm" aria-disabled="true">Locked</span>`}${isAdmin()?`<button class="btn sm nflip" type="button" data-id="${n.id}">${n.is_free?'Make paid':'Make free'}</button>`:''}</div>`;};
+const noteRow=n=>{const ok=canNote(n);return `<div class="srow nrow" data-id="${n.id}"><span class="itile t-acc">${svg(ok?'file':'lock')}</span><div class="nm"><b>${esc(n.dtitle||n.title)}</b><span class="sub">PDF &middot; ${fmtSize(n.size_bytes)}${n.kind==='volume'?' &middot; Full volume':''}</span></div><span class="tpill ${n.is_free?'t-good':'t-acc'}">${n.is_free?'FREE':'PAID'}</span>${ok?`<button class="btn primary sm nopen" type="button" data-id="${n.id}">Open</button><button class="btn sm ndl" type="button" data-id="${n.id}" title="Download PDF">&#8681;</button>`:`<span class="btn sm" aria-disabled="true">Locked</span>`}${isAdmin()?`<button class="btn sm nflip" type="button" data-id="${n.id}">${n.is_free?'Make paid':'Make free'}</button>`:''}</div>`;};
 async function openNote(id,dl){const n=(S.notes||[]).find(x=>x.id==id);if(!n)return;if(!canNote(n)){alert('Yeh note paid students ke liye hai. Full access ke liye Topper Haveli admin se contact karo.');return;}
   const w=dl?null:window.open('','_blank');
-  const{data,error}=await sb.storage.from('notes').createSignedUrl(n.path,600,dl?{download:n.title.replace(/[^\w\- ]+/g,'')+'.pdf'}:undefined);
+  const{data,error}=await sb.storage.from('notes').createSignedUrl(n.path,600,dl?{download:(n.dtitle||n.title).replace(/[^\w\- ]+/g,'')+'.pdf'}:undefined);
   if(error||!data){if(w)w.close();alert('File abhi nahi khul rahi. Thodi der baad try karo.');return;}
-  if(dl){location.href=data.signedUrl;}else{const v='./pdfview.html#u='+encodeURIComponent(data.signedUrl)+'&t='+encodeURIComponent(n.title);if(w){w.location.href=v;}else{location.href=v;}}}
+  if(dl){location.href=data.signedUrl;}else{const v='./pdfview.html#u='+encodeURIComponent(data.signedUrl)+'&t='+encodeURIComponent(n.dtitle||n.title);if(w){w.location.href=v;}else{location.href=v;}}}
 function bindNotes(root){root.querySelectorAll('.nopen').forEach(b=>b.onclick=e=>{e.stopPropagation();openNote(b.dataset.id);});
   root.querySelectorAll('.ndl').forEach(b=>b.onclick=e=>{e.stopPropagation();openNote(b.dataset.id,true);});
   root.querySelectorAll('.nflip').forEach(b=>b.onclick=async e=>{e.stopPropagation();const n=S.notes.find(x=>x.id==b.dataset.id);const{error}=await sb.from('notes').update({is_free:!n.is_free}).eq('id',n.id);if(error){alert(error.message);return;}n.is_free=!n.is_free;const row=b.closest('.nrow');row.outerHTML=noteRow(n);bindNotes(document.getElementById('nlist')||app);});}
@@ -337,16 +341,26 @@ async function vMockRun(id){nav('home');
     document.getElementById('mPrev').onclick=()=>{if(st.idx>0){st.idx--;save();render();}};
     document.getElementById('mNext').onclick=()=>{if(st.idx<list.length-1){st.idx++;save();render();}};
     document.getElementById('mFinish').onclick=()=>{if(confirm('Submit mock? ('+Object.keys(st.answers).length+'/'+list.length+' answered)'))finish();};}
-  async function finish(){if(mockTimer){clearInterval(mockTimer);mockTimer=null;}
-    let score=0;const rows=[];
-    list.forEach(q=>{const c=st.answers[q.id];if(c!==undefined){const ok=c===q.answer;if(ok)score++;
-      rows.push({user_id:S.session.user.id,question_id:q.id,subject_slug:m.subject_slug,chosen:c,correct:ok,mode:'mock'});}});
-    let saveErr=null;
-    for(let i=0;i<rows.length;i+=500){const r=await sb.from('attempts').upsert(rows.slice(i,i+500),{onConflict:'user_id,question_id'});if(r.error)saveErr=r.error;}
-    const done=await sb.from('mock_attempts').update({status:'completed',score,total:list.length,state:st,completed_at:new Date().toISOString()}).eq('id',m.id);
-    if(done.error)saveErr=done.error;
-    if(saveErr){console.warn(saveErr);alert('Result save nahi hua (network/server). Internet check karke dobara Submit dabao - tumhare answers safe hain.');return;}
-    renderResult({...m,status:'completed',score,total:list.length},list);}
+  let finishing=false;
+  async function finish(){if(finishing)return;finishing=true;
+    if(mockTimer){clearInterval(mockTimer);mockTimer=null;}
+    const fb=document.getElementById('mFinish');if(fb){fb.disabled=true;fb.textContent='Result save ho raha hai…';}
+    try{
+      let score=0;const rows=[];
+      list.forEach(q=>{const c=st.answers[q.id];if(c!==undefined){const ok=c===q.answer;if(ok)score++;
+        rows.push({user_id:S.session.user.id,question_id:q.id,subject_slug:m.subject_slug,chosen:c,correct:ok,mode:'mock'});}});
+      let saveErr=null;
+      for(let i=0;i<rows.length;i+=500){const r=await sb.from('attempts').upsert(rows.slice(i,i+500),{onConflict:'user_id,question_id'});if(r.error)saveErr=r.error;}
+      const done=await sb.from('mock_attempts').update({status:'completed',score,total:list.length,state:st,completed_at:new Date().toISOString()}).eq('id',m.id);
+      if(done.error)saveErr=done.error;
+      if(saveErr)throw saveErr;
+      finishing=false;
+      renderResult({...m,status:'completed',score,total:list.length},list);
+    }catch(err){console.warn(err);
+      finishing=false;
+      if(fb){fb.disabled=false;fb.textContent='Submit mock';}
+      if(!mockTimer&&st.ends_at>Date.now())mockTimer=setInterval(tick,1000);
+      alert('Result save nahi hua (network/server). Internet check karke dobara Submit dabao - tumhare answers safe hain.');}}
   function renderResult(mm){const pct=mm.total?Math.round(100*mm.score/mm.total):0;
     setApp(`<div class="card center"><div class="lbl">Mock result</div><h2 style="font-size:40px;margin:6px 0">${pct}%</h2><p class="muted">${pct>=75?'Bahut badhiya!':pct>=50?'Achha prayas, aur practice karo.':'Weak topics dobara practice karo.'}</p><div class="pbar"><i class="${pct>=75?'g':pct<50?'r':''}" style="width:${pct}%"></i></div>
     <div class="grid2 mt"><div class="stat"><b>${mm.score}/${mm.total}</b><span>Score</span></div><div class="stat"><b>${pct}%</b><span>Accuracy</span></div></div>
@@ -366,33 +380,36 @@ async function vMockReview(id){nav('home');
     ${q.options.map((o,i)=>`<button class="opt ${i===q.answer?'right':''} ${c===i&&i!==q.answer?'wrong':''}" disabled type="button">${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
     ${q.explanation?`<div class="expl">${md(q.explanation)}</div>`:''}</div>`;}).join(''));}
 
-async function vDashboard(){nav('dashboard');await fetchSubjects();
+async function vDashboard(){nav('dashboard');
   setApp('<div class="card center muted">Dashboard load ho raha hai…</div>');
-  const atts=await fetchAttempts();
+  try{
+  await withTimeout(fetchSubjects(),20000,'subjects');
+  const atts=await withTimeout(fetchAttempts(),25000,'attempts');
   const paid=isPaid();
   const per={};atts.forEach(a=>{per[a.subject_slug]=per[a.subject_slug]||{n:0,c:0};per[a.subject_slug].n++;if(a.correct)per[a.subject_slug].c++;});
   const totalA=atts.length,totalC=atts.filter(a=>a.correct).length;
   const days=[...new Set(atts.map(a=>(a.created_at||'').slice(0,10)))].sort().reverse();
   let streak=0;const today=new Date();for(let i=0;;i++){const d=new Date(today.getTime()-i*86400000).toISOString().slice(0,10);
     if(days.includes(d)){streak++;}else if(i===0){continue;}else break;}
-  const{data:mocks}=await sb.from('mock_attempts').select('id,subject_slug,score,total,completed_at,status').eq('user_id',S.session.user.id).eq('status','completed').order('completed_at',{ascending:false}).limit(10);
+  const{data:mocks}=await withTimeout(sb.from('mock_attempts').select('id,subject_slug,score,total,completed_at,status').eq('user_id',S.session.user.id).eq('status','completed').order('completed_at',{ascending:false}).limit(10),20000,'mocks');
   let paidHtml='';
   if(paid){
-    const{data:lb}=await sb.rpc('leaderboard');
+    const{data:lb}=await withTimeout(sb.rpc('leaderboard'),20000,'leaderboard');
     let rankHtml='<div class="stat"><b>-</b><span>Rank (answer to enter)</span></div>';
     if(lb&&lb.length){const sorted=[...lb].sort((a,b)=>b.pct-a.pct||b.correct-a.correct);
       const pos=sorted.findIndex(r=>r.user_id===S.session.user.id);
       if(pos>=0)rankHtml=`<div class="stat"><b>#${pos+1} <span class="muted">of ${sorted.length}</span></b><span>All-time rank</span></div>`;}
-    const{data:wj}=await sb.from('attempts').select('correct, questions(id,source)').eq('user_id',S.session.user.id).limit(5000);
+    const{data:wj}=await withTimeout(sb.from('attempts').select('correct, questions(id,source)').eq('user_id',S.session.user.id).limit(5000),25000,'weak');
     const bySrc={};(wj||[]).forEach(r=>{const s=r.questions?qType(r.questions):'Practice';bySrc[s]=bySrc[s]||{n:0,c:0};bySrc[s].n++;if(r.correct)bySrc[s].c++;});
     const weak=Object.entries(bySrc).filter(([,v])=>v.n>=5).map(([k,v])=>({k,pct:Math.round(100*v.c/v.n),n:v.n})).sort((a,b)=>a.pct-b.pct).slice(0,5);
     paidHtml=`<div class="card"><h3>Weak topics (paid)</h3>${weak.length?weak.map(w=>`<div class="row"><span style="flex:1">${esc(w.k)}</span><span class="badge ${w.pct<50?'warn':'free'}">${w.pct}%</span><span class="muted">${w.n} Q</span></div>`).join(''):'<p class="muted">Thodi aur practice karo, phir analysis dikhega.</p>'}</div>
     <div class="card"><h3>Rank (paid)</h3><div class="grid2">${rankHtml}<div class="stat"><b>${totalA}</b><span>Total answered</span></div></div></div>`;}
-  const st=await loadStats();
+  const st=await withTimeout(loadStats(),25000,'stats');
   setApp(`<div class="crumb">Dashboard &rsaquo; Analytics</div><h1 class="h1 sm">Analytics</h1>${analyticsBlock(st)}
   ${paidHtml}
   <div class="card pad"><h3 class="h3">Mock history</h3>${(mocks||[]).map(mk=>`<a class="row" style="min-height:44px;text-decoration:none;color:inherit" href="#/mockreview/${mk.id}"><span style="flex:1">${esc(subjName(mk.subject_slug))}</span><span class="muted">${(mk.completed_at||'').slice(0,10)}</span><span class="badge paid">${mk.score}/${mk.total} &rsaquo;</span></a>`).join('')||'<p class="muted">Koi mock nahi.</p>'}</div>
-  ${!paid?'<div class="card center"><p class="muted">Paid me: weak-topic analysis, rank, unlimited mocks, saare questions.</p></div>':''}`);}
+  ${!paid?'<div class="card center"><p class="muted">Paid me: weak-topic analysis, rank, unlimited mocks, saare questions.</p></div>':''}`);
+  }catch(e){console.warn(e);setApp('<div class="card center"><h3>Dashboard load nahi hua</h3><p class="muted">Network ya server slow hai. Dobara try karo.</p><button class="btn primary block" type="button" onclick="location.reload()">Retry</button></div>');}}
 
 async function vDoubts(){nav('home');
   setApp('<div class="card center muted">Doubts load ho rahe hain…</div>');
@@ -713,7 +730,10 @@ async function route(){const h=location.hash||'#/home';
   const{data}=await sb.auth.getSession();S.session=data.session;
   if(S.recovery){vReset();return;}
   if(!S.session){vLogin();return;}
-  {const fresh=Date.now()-(S.entAt||0)<20000;await Promise.all([(S.profile&&fresh)?0:fetchProfile(),fetchSubjects(),importLegacy(),(S.accessOk&&fresh)?0:sb.rpc('my_access').then(r=>{const a=Array.isArray(r.data)?r.data:[];if(JSON.stringify(a)!==JSON.stringify(S.access||[]))S.qcache={};S.access=a;S.accessOk=!r.error;}).catch(()=>{S.access=[];})]);if(!fresh)S.entAt=Date.now();}
+  {const fresh=Date.now()-(S.entAt||0)<20000;
+  try{await withTimeout(Promise.all([(S.profile&&fresh)?0:fetchProfile(),fetchSubjects(),importLegacy(),(S.accessOk&&fresh)?0:sb.rpc('my_access').then(r=>{const a=Array.isArray(r.data)?r.data:[];if(JSON.stringify(a)!==JSON.stringify(S.access||[]))S.qcache={};S.access=a;S.accessOk=!r.error;}).catch(()=>{S.access=[];})]),30000,'init');
+  }catch(e){console.warn(e);setApp('<div class="card center"><h3>Load nahi hua</h3><p class="muted">Network ya server slow hai. Dobara try karo.</p><button class="btn primary block" type="button" onclick="location.reload()">Retry</button></div>');return;}
+  if(!fresh)S.entAt=Date.now();}
   const parts=h.split('/');const view=parts[1],arg=parts[2];
   if(view==='home')return vHome();
   if(view==='subject')return vSubject(arg);
