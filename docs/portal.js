@@ -82,7 +82,7 @@ async function vNotes(slug){nav('notes');setApp('<div class="card center muted">
   const cur=slug&&groups.some(g=>g.slug===slug)?slug:'all';
   const list=all.filter(n=>cur==='all'||gOf(n)===cur||(cur!=='books'&&n.kind==='volume'&&n.subject_slug===cur));
   const nf=all.filter(n=>n.is_free).length;
-  setApp(`<div class="crumb"><a href="#/home">Dashboard</a> &rsaquo; Study Notes</div><h1 class="h1 sm">Study Notes</h1><p class="lead">Final short-notes PDFs, chapter-wise and as full volumes. ${nf} free, rest for paid students.</p>
+  setApp(`<div class="crumb"><a href="#/home">Dashboard</a> &rsaquo; Study Notes</div><h1 class="h1 sm">Study Notes</h1><p class="lead">Study notes (PDF), chapter-wise and as full volumes. ${nf} free, rest for paid students.</p>
   <div class="row nchips"><a class="chipbtn ${cur==='all'?'on':''}" href="#/notes">All (${all.length})</a>${groups.map(g=>`<a class="chipbtn ${cur===g.slug?'on':''}" href="#/notes/${g.slug}">${esc(g.name)}</a>`).join('')}</div>
   <div id="nlist" class="mt">${list.map(noteRow).join('')||'<div class="empty">Is section me abhi notes nahi hain.</div>'}</div>`);
   bindNotes(document.getElementById('nlist'));}
@@ -226,7 +226,7 @@ async function vHome(){nav('home');await fetchSubjects();
   <div class="two wide2"><div>   <div class="sechead"><h2 class="h2s">${svg('book','o')} Courses</h2><span class="sub">${COURSES.length} courses</span></div>
    <div id="courseList">${COURSES.map(c=>{const subs=courseSubjects(c);if(!subs.length)return '';const solved=subs.reduce((n,x)=>n+((st.per[x.slug]||{}).n||0),0);const full=subs.filter(x=>hasFull(x.slug)).length;
      return `<a class="srow course" style="text-decoration:none;color:inherit" href="#/course/${c.id}"><span class="itile t-acc">${svg(c.icon)}</span><div class="nm"><b>${esc(c.name)}</b><span class="sub">${subs.length} ${subs.length>1?'subjects':'subject'}${solved?' &middot; '+solved+' solved':''}</span></div><span class="tpill ${full===subs.length?'t-acc':'t-good'}">${full===subs.length?'FULL ACCESS':'OPEN'}</span><span class="go">&rsaquo;</span></a>`;}).join('')}</div>
-   ${!paid?`<div class="card pad unlock"><h3 class="h3">${S.profile&&S.profile.is_paid?'Plan khatam ho gaya':'Unlock full access'}</h3><p class="sub">All 6,000+ questions, unlimited mocks, weak-topic analysis and rank. ${S.profile&&S.profile.is_paid?'Renew ke liye':'Full access ke liye'} Topper Haveli admin se contact karo.</p></div>`:''}</div>
+   ${!paid?`<div class="card pad unlock"><h3 class="h3">${S.profile&&S.profile.is_paid?'Plan khatam ho gaya':'Unlock full access'}</h3><p class="sub">All question banks, unlimited mocks, weak-topic analysis and rank. ${S.profile&&S.profile.is_paid?'Renew ke liye':'Full access ke liye'} Topper Haveli admin se contact karo.</p></div>`:''}</div>
    <div><div id="notesHome"></div><div class="sechead"><h2 class="h2s">${svg('clock','o')} Recent Mock Tests</h2><span class="sub">${st.mocks.length} done</span></div>${mocksList(st.mocks)}</div></div>`);
   document.querySelectorAll('.subj').forEach(d=>d.onclick=()=>{location.hash='#/subject/'+d.dataset.slug;});
   fetchNotes().then(all=>{const box=document.getElementById('notesHome');if(!box||!all.length)return;const pick=all.filter(n=>n.is_free).slice(0,3);
