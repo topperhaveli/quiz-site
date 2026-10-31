@@ -41,9 +41,15 @@ async function fetchProfile(){const{data}=await sb.from('profiles').select('*').
 async function fetchSubjects(){if(S.subjects&&S.cfgDone)return;
   if(!S._subjP)S._subjP=Promise.all([sb.from('subjects').select('*').order('sort'),sb.from('app_config').select('*')]).then(([a,b])=>{S.subjects=a.data||[];(b.data||[]).forEach(r=>{try{S.config[r.key]=JSON.parse(r.value)}catch(e){S.config[r.key]=r.value}});S.cfgDone=true;S._subjP=null;}).catch(e=>{S._subjP=null;throw e;});
   await S._subjP;}
+const qprom={};
 async function fetchQuestions(slug){if(S.qcache[slug])return S.qcache[slug];
-  const{data,error}=await sb.from('questions').select('*').eq('subject_slug',slug).order('ord');
-  if(error){console.warn(error);return[];} S.qcache[slug]=data||[]; return S.qcache[slug];}
+  if(qprom[slug])return qprom[slug];
+  const p=(async()=>{const{data,error}=await sb.from('questions').select('*').eq('subject_slug',slug).order('ord');
+  if(error){console.warn(error);return[];} S.qcache[slug]=data||[]; return S.qcache[slug];})();
+  qprom[slug]=p;p.then(()=>{delete qprom[slug];},()=>{delete qprom[slug];});return p;}
+async function fetchQuestionCounts(slug){if(S.qcache[slug])return S.qcache[slug];
+  const{data,error}=await sb.from('questions').select('id,source').eq('subject_slug',slug);
+  if(error){console.warn(error);return[];}return data||[];}
 async function fetchAttemptsLite(){const{data}=await sb.from('attempts').select('subject_slug,correct,created_at').eq('user_id',S.session.user.id).limit(10000);return data||[];}
 async function fetchAttempts(){const{data}=await sb.from('attempts').select('question_id,subject_slug,chosen,correct,mode,created_at').eq('user_id',S.session.user.id);
   return data||[];}
@@ -238,7 +244,7 @@ async function vHome(){nav('home');await fetchSubjects();
     box.innerHTML=`<div class="sechead"><h2 class="h2s">${svg('book','o')} Study Notes</h2><a class="sub" href="#/notes">View all ${all.length} &rsaquo;</a></div>${pick.map(noteRow).join('')}`;bindNotes(box);}).catch(()=>{});}
 
 async function vSubject(slug){nav('home');await fetchSubjects();
-  const[qs,allN]=await Promise.all([fetchQuestions(slug),fetchNotes().catch(()=>[])]);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;const paid=hasFull(slug);
+  const[qs,allN]=await Promise.all([fetchQuestionCounts(slug),fetchNotes().catch(()=>[])]);setTimeout(()=>{fetchQuestions(slug).catch(()=>{});},0);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;const paid=hasFull(slug);
   const nN=allN.filter(n=>n.subject_slug===slug).length;
   const card=(ic,t,sub,cnt,href,btn,dis)=>`<div class="card pad scrd ${dis?'dis':''}"><span class="itile t-acc">${svg(ic)}</span><h3 class="h3">${t}</h3><p class="sub">${sub}</p>${cnt?`<div class="cnt">${cnt}<small> questions</small></div>`:''}${dis?`<span class="btn" aria-disabled="true">${btn}</span>`:`<a class="btn primary" href="${href}">${btn} ${svg('arrow')}</a>`}</div>`;
   setApp(`<div class="crumb"><a href="#/home">Dashboard</a> &rsaquo; ${esc(subjName(slug))}</div><h1 class="h1 sm">${esc(subjName(slug))}</h1><p class="lead">Choose how you want to study. MCQ, previous-year questions and notes are kept separate.</p>
@@ -251,13 +257,12 @@ async function vSubject(slug){nav('home');await fetchSubjects();
 
 async function vPractice(slug,initSrc){nav('home');
   setApp('<div class="card center muted">Questions load ho rahe hain…</div>');
-  const qs=await fetchQuestions(slug);
-  const atts=await fetchAttempts();
+  const[qs0,atts]=await Promise.all([fetchQuestions(slug),fetchAttempts()]);const qs=qs0.some(q=>Number.isFinite(q.chapter_rank))?qs0.map((q,i)=>[q,i]).sort((a,b)=>((Number.isFinite(a[0].chapter_rank)?a[0].chapter_rank:1e9)-(Number.isFinite(b[0].chapter_rank)?b[0].chapter_rank:1e9))||(a[1]-b[1])).map(x=>x[0]):qs0;
   const amap={};atts.forEach(a=>amap[a.question_id]=a);
   if(!qs.length){setApp('<div class="card center"><h3>No access</h3><p class="muted">Is subject ke questions abhi locked hain.</p><a class="btn block" href="#/home">Back</a></div>');return;}
   const sources=[...new Set(qs.map(qType))];
   let idx=0,filter='all',src=(initSrc&&sources.includes(initSrc))?initSrc:'all';
-  const chapters=[...new Set(qs.map(q=>q.chapter).filter(Boolean))];const hasUntagged=chapters.length>0&&qs.some(q=>!q.chapter);
+  const chRank={};qs.forEach(q=>{if(q.chapter&&Number.isFinite(q.chapter_rank)&&!(chRank[q.chapter]<=q.chapter_rank))chRank[q.chapter]=q.chapter_rank;});const chapters=[...new Set(qs.map(q=>q.chapter).filter(Boolean))].sort((a,b)=>((chRank[a]??1e9)-(chRank[b]??1e9)));const hasUntagged=chapters.length>0&&qs.some(q=>!q.chapter);
   const CHKEY='jvvnl-chapter-v1:'+slug;let ch='all';
   try{const sv=localStorage.getItem(CHKEY);if(sv&&(chapters.includes(sv)||(sv==='__none'&&hasUntagged)))ch=sv;}catch(e){}
   const chOk=q=>ch==='all'||(ch==='__none'?!q.chapter:q.chapter===ch);
