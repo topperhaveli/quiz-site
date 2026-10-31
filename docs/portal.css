@@ -187,3 +187,6 @@ html{scroll-padding-top:84px}
 textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font:inherit;background:#fff;color:inherit;resize:vertical;margin-top:6px}
 .annrow{padding:8px 0;border-bottom:1px solid var(--line)}.annrow:last-child{border-bottom:0}
 .annc{margin-bottom:14px}
+
+.chap{display:inline-block;margin-left:8px;font-size:12px;font-weight:700;color:var(--acc2);background:var(--accsoft);border:1px solid #f0a878;border-radius:8px;padding:3px 9px;vertical-align:middle;max-width:100%;white-space:normal}
+.chnote{margin:6px 2px 0;font-size:12px}
