@@ -34,19 +34,21 @@ const qLabel=q=>{if(!isPYQ(q))return 'Practice';const s=String(q.source||'');if(
 const isAdmin=()=>!!(S.profile&&S.profile.is_admin);
 const withTimeout=(p,ms,label)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout: '+(label||'request'))),ms))]);
 
-async function fetchProfile(){const{data}=await sb.from('profiles').select('*').eq('id',S.session.user.id).single();{const o=S.profile;if(o&&data&&(o.is_paid!==data.is_paid||o.paid_until!==data.paid_until||o.access_scope!==data.access_scope))S.qcache={};}S.profile=data;
+async function fetchProfile(){const{data}=await sb.from('profiles').select('*').eq('id',S.session.user.id).single();{const o=S.profile;if(o&&data&&(o.is_paid!==data.is_paid||o.paid_until!==data.paid_until||o.access_scope!==data.access_scope))resetQ();}S.profile=data;
   document.getElementById('navAdmin').classList.toggle('hidden',!isAdmin());['navAdmin2','sAdminLbl'].forEach(i=>{const e=document.getElementById(i);if(e)e.classList.toggle('hidden',!isAdmin());});
   const b=document.getElementById('userBadge');
   b.innerHTML=isAdmin()?'<span class="badge warn">ADMIN</span>':(isPaid()?'<span class="badge paid">PAID</span>':(isScoped()?'<span class="badge paid">PLAN &middot; SECTIONS</span>':'<span class="badge free">FREE</span>'));}
 async function fetchSubjects(){if(S.subjects&&S.cfgDone)return;
   if(!S._subjP)S._subjP=Promise.all([sb.from('subjects').select('*').order('sort'),sb.from('app_config').select('*')]).then(([a,b])=>{S.subjects=a.data||[];(b.data||[]).forEach(r=>{try{S.config[r.key]=JSON.parse(r.value)}catch(e){S.config[r.key]=r.value}});S.cfgDone=true;S._subjP=null;}).catch(e=>{S._subjP=null;throw e;});
   await S._subjP;}
-const qprom={};
+let qprom={},qgen=0;
+function resetQ(){S.qcache={};qprom={};qgen++;}
 async function fetchQuestions(slug){if(S.qcache[slug])return S.qcache[slug];
   if(qprom[slug])return qprom[slug];
+  const g=qgen,pm=qprom;
   const p=(async()=>{const{data,error}=await sb.from('questions').select('*').eq('subject_slug',slug).order('ord');
-  if(error){console.warn(error);return[];} S.qcache[slug]=data||[]; return S.qcache[slug];})();
-  qprom[slug]=p;p.then(()=>{delete qprom[slug];},()=>{delete qprom[slug];});return p;}
+  if(error){console.warn(error);return[];} const rows=data||[]; if(g===qgen)S.qcache[slug]=rows; return rows;})();
+  pm[slug]=p;p.then(()=>{if(pm[slug]===p)delete pm[slug];},()=>{if(pm[slug]===p)delete pm[slug];});return p;}
 async function fetchQuestionCounts(slug){if(S.qcache[slug])return S.qcache[slug];
   const{data,error}=await sb.from('questions').select('id,source').eq('subject_slug',slug);
   if(error){console.warn(error);return[];}return data||[];}
@@ -244,7 +246,7 @@ async function vHome(){nav('home');await fetchSubjects();
     box.innerHTML=`<div class="sechead"><h2 class="h2s">${svg('book','o')} Study Notes</h2><a class="sub" href="#/notes">View all ${all.length} &rsaquo;</a></div>${pick.map(noteRow).join('')}`;bindNotes(box);}).catch(()=>{});}
 
 async function vSubject(slug){nav('home');await fetchSubjects();
-  const[qs,allN]=await Promise.all([fetchQuestionCounts(slug),fetchNotes().catch(()=>[])]);setTimeout(()=>{fetchQuestions(slug).catch(()=>{});},0);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;const paid=hasFull(slug);
+  const[qs,allN]=await Promise.all([fetchQuestionCounts(slug),fetchNotes().catch(()=>[])]);if(S.session&&qs.length)setTimeout(()=>{fetchQuestions(slug).catch(()=>{});},0);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;const paid=hasFull(slug);
   const nN=allN.filter(n=>n.subject_slug===slug).length;
   const card=(ic,t,sub,cnt,href,btn,dis)=>`<div class="card pad scrd ${dis?'dis':''}"><span class="itile t-acc">${svg(ic)}</span><h3 class="h3">${t}</h3><p class="sub">${sub}</p>${cnt?`<div class="cnt">${cnt}<small> questions</small></div>`:''}${dis?`<span class="btn" aria-disabled="true">${btn}</span>`:`<a class="btn primary" href="${href}">${btn} ${svg('arrow')}</a>`}</div>`;
   setApp(`<div class="crumb"><a href="#/home">Dashboard</a> &rsaquo; ${esc(subjName(slug))}</div><h1 class="h1 sm">${esc(subjName(slug))}</h1><p class="lead">Choose how you want to study. MCQ, previous-year questions and notes are kept separate.</p>
@@ -743,7 +745,7 @@ async function route(){const h=location.hash||'#/home';
   if(S.recovery){vReset();return;}
   if(!S.session){vLogin();return;}
   {const fresh=Date.now()-(S.entAt||0)<20000;
-  try{await withTimeout(Promise.all([(S.profile&&fresh)?0:fetchProfile(),fetchSubjects(),importLegacy(),(S.accessOk&&fresh)?0:sb.rpc('my_access').then(r=>{const a=Array.isArray(r.data)?r.data:[];if(JSON.stringify(a)!==JSON.stringify(S.access||[]))S.qcache={};S.access=a;S.accessOk=!r.error;}).catch(()=>{S.access=[];})]),30000,'init');
+  try{await withTimeout(Promise.all([(S.profile&&fresh)?0:fetchProfile(),fetchSubjects(),importLegacy(),(S.accessOk&&fresh)?0:sb.rpc('my_access').then(r=>{const a=Array.isArray(r.data)?r.data:[];if(JSON.stringify(a)!==JSON.stringify(S.access||[]))resetQ();S.access=a;S.accessOk=!r.error;}).catch(()=>{S.access=[];})]),30000,'init');
   }catch(e){console.warn(e);setApp('<div class="card center"><h3>Load nahi hua</h3><p class="muted">Network ya server slow hai. Dobara try karo.</p><button class="btn primary block" type="button" onclick="location.reload()">Retry</button></div>');return;}
   if(!fresh)S.entAt=Date.now();}
   const parts=h.split('/');const view=parts[1],arg=parts[2];
@@ -759,7 +761,7 @@ async function route(){const h=location.hash||'#/home';
   if(view==='dashboard')return vDashboard();
   if(view==='admin')return vAdmin(arg==='student'?parts[3]:null);
   return vHome();}
-document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut();S.profile=null;S.qcache={};S.access=null;S.accessOk=false;S.notes=null;S.subjects=null;location.hash='#/login';route();};
+document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut();S.profile=null;resetQ();S.access=null;S.accessOk=false;S.notes=null;S.subjects=null;location.hash='#/login';route();};
 window.addEventListener('hashchange',route);
 setInterval(async()=>{try{
   if(!S.session||document.hidden)return;
@@ -768,7 +770,7 @@ setInterval(async()=>{try{
   await fetchProfile();
   const r=await sb.rpc('my_access');if(!r.error){S.access=Array.isArray(r.data)?r.data:[];S.accessOk=true;}
   S.entAt=Date.now();
-  if(sig()!==before){S.qcache={};const v=(location.hash||'#/home').split('/')[1];
+  if(sig()!==before){resetQ();const v=(location.hash||'#/home').split('/')[1];
     if(['home','subject','mocksetup','notes','course','dashboard'].includes(v))route();}
 }catch(e){}},20000);
 function vReset(){document.getElementById('navbar').classList.add('hidden');document.getElementById('logoutBtn').classList.add('hidden');
@@ -783,7 +785,7 @@ function vReset(){document.getElementById('navbar').classList.add('hidden');docu
     msg.classList.remove('hidden');
     if(error){msg.textContent=error.message;return;}
     msg.textContent='Password set ho gaya. Ab login karo.';msg.classList.add('ok');
-    S.recovery=false;await sb.auth.signOut();S.profile=null;S.qcache={};S.access=null;S.accessOk=false;S.notes=null;setTimeout(()=>{location.hash='#/login';route();},1200);};}
-sb.auth.onAuthStateChange((e,s)=>{if(e==='SIGNED_IN'||e==='SIGNED_OUT')S.qcache={};S.session=s;if(e==='PASSWORD_RECOVERY'){S.recovery=true;vReset();}});
+    S.recovery=false;await sb.auth.signOut();S.profile=null;resetQ();S.access=null;S.accessOk=false;S.notes=null;setTimeout(()=>{location.hash='#/login';route();},1200);};}
+sb.auth.onAuthStateChange((e,s)=>{if(e==='SIGNED_IN'||e==='SIGNED_OUT')resetQ();S.session=s;if(e==='PASSWORD_RECOVERY'){S.recovery=true;vReset();}});
 route();
 })();
