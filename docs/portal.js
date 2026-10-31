@@ -42,7 +42,7 @@ async function fetchSubjects(){if(S.subjects&&S.cfgDone)return;
   if(!S._subjP)S._subjP=Promise.all([sb.from('subjects').select('*').order('sort'),sb.from('app_config').select('*')]).then(([a,b])=>{S.subjects=a.data||[];(b.data||[]).forEach(r=>{try{S.config[r.key]=JSON.parse(r.value)}catch(e){S.config[r.key]=r.value}});S.cfgDone=true;S._subjP=null;}).catch(e=>{S._subjP=null;throw e;});
   await S._subjP;}
 let qprom={},qgen=0;
-function resetQ(){S.qcache={};qprom={};qgen++;}
+function resetQ(){S.qcache={};qprom={};S.good=null;qgen++;}
 async function pageAll(make,keyOf,opts){
   const page=(opts&&opts.page)||500,maxPages=(opts&&opts.maxPages)||400;
   const out=[],seen=new Set();let from=0,total=null;
