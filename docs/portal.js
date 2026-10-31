@@ -61,15 +61,29 @@ async function pageAll(make,keyOf,opts){
   if(total!==null&&out.length<total)throw new Error('incomplete page set '+out.length+'/'+total);
   return out;
 }
+const STALE='stale-session';
+function goodS(){return S.good||(S.good={});}
+function curUid(){return S.session&&S.session.user&&S.session.user.id;}
+function retryCard(m){return `<div class="card center"><p class="muted">${m}</p><button class="btn primary" data-retry="1">Retry</button></div>`;}
+document.addEventListener('click',e=>{const b=e.target&&e.target.closest?e.target.closest('[data-retry]'):null;if(b)route();});
+function isStale(e){return !!(e&&e.message===STALE);}
 async function fetchQuestions(slug){if(S.qcache[slug])return S.qcache[slug];
   if(qprom[slug])return qprom[slug];
-  const g=qgen,pm=qprom;
-  const p=(async()=>{let rows;try{rows=await pageAll((a,b,c)=>sb.from('questions').select('*',c?{count:'exact'}:undefined).eq('subject_slug',slug).order('ord').order('id').range(a,b),x=>x.id);}catch(error){console.warn(error);return[];} if(g===qgen)S.qcache[slug]=rows; return rows;})();
+  const g=qgen,pm=qprom,uid=curUid();
+  const p=(async()=>{const rows=await pageAll((a,b,c)=>sb.from('questions').select('*',c?{count:'exact'}:undefined).eq('subject_slug',slug).order('ord').order('id').range(a,b),x=>x.id); if(g!==qgen||curUid()!==uid)throw new Error(STALE); S.qcache[slug]=rows; return rows;})();
   pm[slug]=p;p.then(()=>{if(pm[slug]===p)delete pm[slug];},()=>{if(pm[slug]===p)delete pm[slug];});return p;}
 async function fetchQuestionCounts(slug){if(S.qcache[slug])return S.qcache[slug];
-  try{return await pageAll((a,b,c)=>sb.from('questions').select('id,source',c?{count:'exact'}:undefined).eq('subject_slug',slug).order('id').range(a,b),x=>x.id);}catch(error){console.warn(error);return[];}}
-async function fetchAttemptsLite(){try{return await pageAll((a,b,c)=>sb.from('attempts').select('question_id,subject_slug,correct,created_at',c?{count:'exact'}:undefined).eq('user_id',S.session.user.id).order('question_id').range(a,b),x=>x.question_id);}catch(e){console.warn(e);return[];}}
-async function fetchAttempts(){try{return await pageAll((a,b,c)=>sb.from('attempts').select('question_id,subject_slug,chosen,correct,mode,created_at',c?{count:'exact'}:undefined).eq('user_id',S.session.user.id).order('question_id').range(a,b),x=>x.question_id);}catch(e){console.warn(e);return[];}}
+  const g=qgen,uid=curUid();
+  const rows=await pageAll((a,b,c)=>sb.from('questions').select('id,source',c?{count:'exact'}:undefined).eq('subject_slug',slug).order('id').range(a,b),x=>x.id);
+  if(g!==qgen||curUid()!==uid)throw new Error(STALE);return rows;}
+async function fetchAttemptsLite(){const g=qgen,uid=curUid();
+  try{const rows=await pageAll((a,b,c)=>sb.from('attempts').select('question_id,subject_slug,correct,created_at',c?{count:'exact'}:undefined).eq('user_id',uid).order('question_id').range(a,b),x=>x.question_id);
+    if(g!==qgen||curUid()!==uid)throw new Error(STALE);goodS().lite={uid,rows};return rows;}
+  catch(e){if(isStale(e))throw e;const lg=goodS().lite;if(lg&&lg.uid===uid&&uid===curUid()){console.warn('attempts refresh failed, using last loaded',e);return lg.rows;}throw e;}}
+async function fetchAttempts(){const g=qgen,uid=curUid();
+  try{const rows=await pageAll((a,b,c)=>sb.from('attempts').select('question_id,subject_slug,chosen,correct,mode,created_at',c?{count:'exact'}:undefined).eq('user_id',uid).order('question_id').range(a,b),x=>x.question_id);
+    if(g!==qgen||curUid()!==uid)throw new Error(STALE);goodS().att={uid,rows};return rows;}
+  catch(e){if(isStale(e))throw e;const err=new Error('attempts load failed');err.cause=e;throw err;}}
 
 async function importLegacy(){if(localStorage.getItem('portal_imported_v1'))return;
   try{const saved=JSON.parse(localStorage.getItem('jvvnl-source-bank-progress-v1')||'null');
@@ -166,7 +180,9 @@ const IC={
  list:'<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>'};
 const svg=(k,c)=>`<svg class="ic ${c||''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[k]}</svg>`;
 const tier=p=>p>=90?['Mastered','t-good','g']:p>=80?['Proficient','t-acc','']:p>=70?['Needs Review','t-mid','m']:['Action Required','t-bad','r'];
-async function loadStats(){
+async function loadStats(){const _g=qgen,_uid=curUid();const _r=await _loadStats();if(_g===qgen&&curUid()===_uid)goodS().stats={uid:_uid,v:_r};return _r;}
+function lastStats(){const x=goodS().stats;return x&&x.uid===curUid()?x.v:null;}
+async function _loadStats(){
   const mP=sb.from('mock_attempts').select('id,subject_slug,score,total,completed_at,status').eq('user_id',S.session.user.id).eq('status','completed').order('completed_at',{ascending:false}).limit(20);
   const atts=await fetchAttemptsLite();
   const per={};atts.forEach(a=>{per[a.subject_slug]=per[a.subject_slug]||{n:0,c:0};per[a.subject_slug].n++;if(a.correct)per[a.subject_slug].c++;});
@@ -211,7 +227,7 @@ const COURSES=[
 const courseSubjects=c=>c.slugs.map(sl=>(S.subjects||[]).find(x=>x.slug===sl)).filter(Boolean);
 async function vCourse(id){nav('home');await fetchSubjects();const c=COURSES.find(x=>x.id===id);
   if(!c){location.hash='#/home';return;}
-  const st=await loadStats().catch(()=>({per:{}}));const subs=courseSubjects(c);
+  const st=await loadStats().catch(()=>lastStats()||{per:{},failed:true});const subs=courseSubjects(c);
   setApp(`<div class="crumb"><a href="#/home">Dashboard</a> &rsaquo; Courses &rsaquo; ${esc(c.name)}</div><h1 class="h1 sm">${esc(c.name)}</h1>
   <div>${subs.map(s=>{const p=(st.per||{})[s.slug];const full=hasFull(s.slug);return `<a class="srow" style="text-decoration:none;color:inherit" href="#/subject/${s.slug}"><span class="itile t-acc">${svg('file')}</span><div class="nm"><b>${esc(s.name)}</b><span class="sub">${p?p.n+' solved &middot; '+Math.round(100*p.c/p.n)+'% accuracy':(full?'Full bank':'Free preview: '+s.free_question_count+' Q')}</span></div><span class="tpill ${full?'t-acc':'t-good'}">${full?'FULL':'FREE PREVIEW'}</span><span class="go">&rsaquo;</span></a>`;}).join('')}</div>
   <a class="btn block mt" href="#/notes">Study Notes</a><a class="btn block mt" href="#/home">Back to dashboard</a>`);}
@@ -219,7 +235,7 @@ async function vHome(){nav('home');await fetchSubjects();
   const paid=isPaid();
   const note=localStorage.getItem('portal_import_note');if(note)localStorage.removeItem('portal_import_note');
   const omP=sb.from('mock_attempts').select('id,subject_slug,started_at,state,config').eq('user_id',S.session.user.id).eq('status','in_progress').order('started_at',{ascending:false}).limit(1);
-  let st;try{st=await loadStats();}catch(e){st={atts:[],per:{},totalA:0,totalC:0,acc:null,streak:0,mocks:[],last:null,avg:null};}
+  let st;try{st=await loadStats();}catch(e){st=lastStats()||{atts:[],per:{},totalA:0,totalC:0,acc:null,streak:0,mocks:[],last:null,avg:null,failed:true};}
   const{data:openMocks}=await omP;
   const nm=((S.profile&&S.profile.display_name)||'').trim().split(/\s+/)[0];
   const lastSubj=st.last&&(S.subjects||[]).find(s=>s.slug===st.last.subject_slug);
@@ -243,7 +259,7 @@ async function vHome(){nav('home');await fetchSubjects();
   }catch(e){}
   const mr=masteryRows(st,4);
   const mockTo=lastSubj?'#/mocksetup/'+lastSubj.slug:((S.subjects||[])[0]?'#/mocksetup/'+S.subjects[0].slug:'#/home');
-  setApp(`${note?`<div class="notice ok">${esc(note)}</div>`:''}${annHtml}
+  setApp(`${st.failed?'<div class="notice">Progress abhi load nahi ho paaya (network). Aapka saved progress safe hai. <button class="btn" data-retry="1">Retry</button></div>':''}${note?`<div class="notice ok">${esc(note)}</div>`:''}${annHtml}
   <div class="hero"><div class="herol"><span class="semi">${svg('grad')} TOPPER HAVELI &middot; JVVNL JA</span>
    <h1 class="h1">Welcome back${nm?', '+esc(nm):''}!</h1>
    <p class="lead">${st.totalA?`You have solved <b>${st.totalA} questions</b> at <b>${st.acc}% accuracy</b>${st.streak?` and you are on a <b>${st.streak}-day</b> streak`:''}.`:'Solve your first question today and start your <b>study streak</b>.'}</p></div>
@@ -261,7 +277,7 @@ async function vHome(){nav('home');await fetchSubjects();
     box.innerHTML=`<div class="sechead"><h2 class="h2s">${svg('book','o')} Study Notes</h2><a class="sub" href="#/notes">View all ${all.length} &rsaquo;</a></div>${pick.map(noteRow).join('')}`;bindNotes(box);}).catch(()=>{});}
 
 async function vSubject(slug){nav('home');await fetchSubjects();
-  const[qs,allN]=await Promise.all([fetchQuestionCounts(slug),fetchNotes().catch(()=>[])]);if(S.session&&qs.length)setTimeout(()=>{fetchQuestions(slug).catch(()=>{});},0);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;const paid=hasFull(slug);
+  let qs,allN;try{[qs,allN]=await Promise.all([fetchQuestionCounts(slug),fetchNotes().catch(()=>[])]);}catch(e){if(isStale(e)){route();return;}setApp(retryCard('Subject abhi load nahi ho paaya. Dobara try karein.'));return;}if(S.session&&qs.length)setTimeout(()=>{fetchQuestions(slug).catch(()=>{});},0);const nP=qs.filter(isPYQ).length,nM=qs.length-nP;const paid=hasFull(slug);
   const nN=allN.filter(n=>n.subject_slug===slug).length;
   const card=(ic,t,sub,cnt,href,btn,dis)=>`<div class="card pad scrd ${dis?'dis':''}"><span class="itile t-acc">${svg(ic)}</span><h3 class="h3">${t}</h3><p class="sub">${sub}</p>${cnt?`<div class="cnt">${cnt}<small> questions</small></div>`:''}${dis?`<span class="btn" aria-disabled="true">${btn}</span>`:`<a class="btn primary" href="${href}">${btn} ${svg('arrow')}</a>`}</div>`;
   setApp(`<div class="crumb"><a href="#/home">Dashboard</a> &rsaquo; ${esc(subjName(slug))}</div><h1 class="h1 sm">${esc(subjName(slug))}</h1><p class="lead">Choose how you want to study. MCQ, previous-year questions and notes are kept separate.</p>
@@ -274,7 +290,7 @@ async function vSubject(slug){nav('home');await fetchSubjects();
 
 async function vPractice(slug,initSrc){nav('home');
   setApp('<div class="card center muted">Questions load ho rahe hain…</div>');
-  const[qs0,atts]=await Promise.all([fetchQuestions(slug),fetchAttempts()]);const qs=qs0.some(q=>Number.isFinite(q.chapter_rank))?qs0.map((q,i)=>[q,i]).sort((a,b)=>((Number.isFinite(a[0].chapter_rank)?a[0].chapter_rank:1e9)-(Number.isFinite(b[0].chapter_rank)?b[0].chapter_rank:1e9))||(a[1]-b[1])).map(x=>x[0]):qs0;
+  let qs0,atts;try{[qs0,atts]=await Promise.all([fetchQuestions(slug),fetchAttempts()]);}catch(e){if(isStale(e)){route();return;}setApp(retryCard('Questions ya saved answers load nahi ho paaye. Aapka progress safe hai, dobara try karein.'));return;}const qs=qs0.some(q=>Number.isFinite(q.chapter_rank))?qs0.map((q,i)=>[q,i]).sort((a,b)=>((Number.isFinite(a[0].chapter_rank)?a[0].chapter_rank:1e9)-(Number.isFinite(b[0].chapter_rank)?b[0].chapter_rank:1e9))||(a[1]-b[1])).map(x=>x[0]):qs0;
   const amap={};atts.forEach(a=>amap[a.question_id]=a);
   if(!qs.length){setApp('<div class="card center"><h3>No access</h3><p class="muted">Is subject ke questions abhi locked hain.</p><a class="btn block" href="#/home">Back</a></div>');return;}
   const sources=[...new Set(qs.map(qType))];
@@ -320,7 +336,7 @@ async function vMockSetup(slug){nav('home');await fetchSubjects();
   const{count}=await sb.from('mock_attempts').select('id',{count:'exact',head:true}).eq('user_id',S.session.user.id).eq('subject_slug',slug);
   const freeLeft=S.config.free_mock_per_subject?(count<1):false;
   if(!paid&&!freeLeft){setApp(`<div class="card center"><h3>Free mock used</h3><p class="muted">${esc(subjName(slug))} ka free mock ho chuka. Paid me unlimited mocks milte hain.</p><a class="btn block" href="#/subject/${slug}">Back</a></div>`);return;}
-  const qs=await fetchQuestions(slug);
+  let qs;try{qs=await fetchQuestions(slug);}catch(e){if(isStale(e)){route();return;}setApp(retryCard('Questions abhi load nahi ho paaye. Dobara try karein.'));return;}
   const maxN=qs.length;
   setApp(`<div class="card"><h2>Mock - ${esc(subjName(slug))}</h2>
   <p class="muted">${paid?'Paid: apni pasand ka size.':`FREE mock: ${Math.min(25,maxN)} questions, ${Math.min(25,maxN)} minutes.`} Available: ${maxN} questions.</p>
