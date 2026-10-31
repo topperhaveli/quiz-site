@@ -43,18 +43,33 @@ async function fetchSubjects(){if(S.subjects&&S.cfgDone)return;
   await S._subjP;}
 let qprom={},qgen=0;
 function resetQ(){S.qcache={};qprom={};qgen++;}
+async function pageAll(make,keyOf,opts){
+  const page=(opts&&opts.page)||500,maxPages=(opts&&opts.maxPages)||400;
+  const out=[],seen=new Set();let from=0,total=null;
+  for(let n=0;;n++){
+    if(n>=maxPages)throw new Error('paging guard');
+    let r=await make(from,from+page-1,from===0);
+    if(r.error){r=await make(from,from+page-1,from===0);}
+    if(r.error)throw r.error;
+    const rows=r.data||[];
+    if(from===0&&typeof r.count==='number')total=r.count;
+    for(const x of rows){const k=keyOf(x);if(!seen.has(k)){seen.add(k);out.push(x);}}
+    if(!rows.length)break;
+    from+=rows.length;
+    if(total!==null?from>=total:rows.length<page)break;
+  }
+  if(total!==null&&out.length<total)throw new Error('incomplete page set '+out.length+'/'+total);
+  return out;
+}
 async function fetchQuestions(slug){if(S.qcache[slug])return S.qcache[slug];
   if(qprom[slug])return qprom[slug];
   const g=qgen,pm=qprom;
-  const p=(async()=>{const{data,error}=await sb.from('questions').select('*').eq('subject_slug',slug).order('ord');
-  if(error){console.warn(error);return[];} const rows=data||[]; if(g===qgen)S.qcache[slug]=rows; return rows;})();
+  const p=(async()=>{let rows;try{rows=await pageAll((a,b,c)=>sb.from('questions').select('*',c?{count:'exact'}:undefined).eq('subject_slug',slug).order('ord').order('id').range(a,b),x=>x.id);}catch(error){console.warn(error);return[];} if(g===qgen)S.qcache[slug]=rows; return rows;})();
   pm[slug]=p;p.then(()=>{if(pm[slug]===p)delete pm[slug];},()=>{if(pm[slug]===p)delete pm[slug];});return p;}
 async function fetchQuestionCounts(slug){if(S.qcache[slug])return S.qcache[slug];
-  const{data,error}=await sb.from('questions').select('id,source').eq('subject_slug',slug);
-  if(error){console.warn(error);return[];}return data||[];}
-async function fetchAttemptsLite(){const{data}=await sb.from('attempts').select('subject_slug,correct,created_at').eq('user_id',S.session.user.id).limit(10000);return data||[];}
-async function fetchAttempts(){const{data}=await sb.from('attempts').select('question_id,subject_slug,chosen,correct,mode,created_at').eq('user_id',S.session.user.id);
-  return data||[];}
+  try{return await pageAll((a,b,c)=>sb.from('questions').select('id,source',c?{count:'exact'}:undefined).eq('subject_slug',slug).order('id').range(a,b),x=>x.id);}catch(error){console.warn(error);return[];}}
+async function fetchAttemptsLite(){try{return await pageAll((a,b,c)=>sb.from('attempts').select('question_id,subject_slug,correct,created_at',c?{count:'exact'}:undefined).eq('user_id',S.session.user.id).order('question_id').range(a,b),x=>x.question_id);}catch(e){console.warn(e);return[];}}
+async function fetchAttempts(){try{return await pageAll((a,b,c)=>sb.from('attempts').select('question_id,subject_slug,chosen,correct,mode,created_at',c?{count:'exact'}:undefined).eq('user_id',S.session.user.id).order('question_id').range(a,b),x=>x.question_id);}catch(e){console.warn(e);return[];}}
 
 async function importLegacy(){if(localStorage.getItem('portal_imported_v1'))return;
   try{const saved=JSON.parse(localStorage.getItem('jvvnl-source-bank-progress-v1')||'null');
@@ -413,7 +428,7 @@ async function vDashboard(){nav('dashboard');
     if(lb&&lb.length){const sorted=[...lb].sort((a,b)=>b.pct-a.pct||b.correct-a.correct);
       const pos=sorted.findIndex(r=>r.user_id===S.session.user.id);
       if(pos>=0)rankHtml=`<div class="stat"><b>#${pos+1} <span class="muted">of ${sorted.length}</span></b><span>All-time rank</span></div>`;}
-    const{data:wj}=await withTimeout(sb.from('attempts').select('correct, questions(id,source)').eq('user_id',S.session.user.id).limit(5000),25000,'weak');
+    const{data:wj}=await withTimeout(pageAll((a,b,c)=>sb.from('attempts').select('question_id,correct, questions(id,source)',c?{count:'exact'}:undefined).eq('user_id',S.session.user.id).order('question_id').range(a,b),x=>x.question_id),60000,'weak');
     const bySrc={};(wj||[]).forEach(r=>{const s=r.questions?qType(r.questions):'Practice';bySrc[s]=bySrc[s]||{n:0,c:0};bySrc[s].n++;if(r.correct)bySrc[s].c++;});
     const weak=Object.entries(bySrc).filter(([,v])=>v.n>=5).map(([k,v])=>({k,pct:Math.round(100*v.c/v.n),n:v.n})).sort((a,b)=>a.pct-b.pct).slice(0,5);
     paidHtml=`<div class="card"><h3>Weak topics (paid)</h3>${weak.length?weak.map(w=>`<div class="row"><span style="flex:1">${esc(w.k)}</span><span class="badge ${w.pct<50?'warn':'free'}">${w.pct}%</span><span class="muted">${w.n} Q</span></div>`).join(''):'<p class="muted">Thodi aur practice karo, phir analysis dikhega.</p>'}</div>
