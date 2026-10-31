@@ -257,26 +257,33 @@ async function vPractice(slug,initSrc){nav('home');
   if(!qs.length){setApp('<div class="card center"><h3>No access</h3><p class="muted">Is subject ke questions abhi locked hain.</p><a class="btn block" href="#/home">Back</a></div>');return;}
   const sources=[...new Set(qs.map(qType))];
   let idx=0,filter='all',src=(initSrc&&sources.includes(initSrc))?initSrc:'all';
-  {const l0=qs.filter(q=>src==='all'||qType(q)===src);const f=l0.findIndex(q=>amap[q.id]===undefined);if(f>0)idx=f;}
-  const filtered=()=>qs.filter(q=>(src==='all'||qType(q)===src)&&(filter==='all'||(filter==='unanswered'&&amap[q.id]===undefined)||(filter==='wrong'&&amap[q.id]&&!amap[q.id].correct)||(filter==='correct'&&amap[q.id]&&amap[q.id].correct)));
+  const chapters=[...new Set(qs.map(q=>q.chapter).filter(Boolean))];const hasUntagged=chapters.length>0&&qs.some(q=>!q.chapter);
+  const CHKEY='jvvnl-chapter-v1:'+slug;let ch='all';
+  try{const sv=localStorage.getItem(CHKEY);if(sv&&(chapters.includes(sv)||(sv==='__none'&&hasUntagged)))ch=sv;}catch(e){}
+  const chOk=q=>ch==='all'||(ch==='__none'?!q.chapter:q.chapter===ch);
+  {const l0=qs.filter(q=>(src==='all'||qType(q)===src)&&chOk(q));const f=l0.findIndex(q=>amap[q.id]===undefined);if(f>0)idx=f;}
+  const filtered=()=>qs.filter(q=>(src==='all'||qType(q)===src)&&chOk(q)&&(filter==='all'||(filter==='unanswered'&&amap[q.id]===undefined)||(filter==='wrong'&&amap[q.id]&&!amap[q.id].correct)||(filter==='correct'&&amap[q.id]&&amap[q.id].correct)));
   function render(){const sy=window.scrollY;requestAnimationFrame(()=>{});const list=filtered();if(idx>=list.length)idx=Math.max(0,list.length-1);
     const q=list[idx];
+    const chCount=c=>qs.filter(q=>(src==='all'||qType(q)===src)&&(c==='__none'?!q.chapter:q.chapter===c)).length;
+    const chSel=chapters.length?`<div class="row mt"><select id="fCh" aria-label="Chapter"><option value="all">All chapters</option>${chapters.filter(c=>chCount(c)>0||c===ch).map(c=>`<option ${c===ch?'selected':''} value="${esc(c)}">${esc(c)} (${chCount(c)})</option>`).join('')}${hasUntagged&&chCount('__none')>0?`<option ${ch==='__none'?'selected':''} value="__none">Chapter not tagged (${chCount('__none')})</option>`:''}</select></div>`:`<p class="muted small chnote">Chapter-wise selection abhi is subject ke liye available nahi hai (chapter tags nahi mile).</p>`;
     const srcOpts=['<option value="all">All questions</option>'].concat(sources.map(s=>`<option ${s===src?'selected':''} value="${esc(s)}">${esc(s)}</option>`)).join('');
     if(!q){setApp(`<div class="card"><div class="row"><a class="chipbtn" href="#/subject/${slug}">&lsaquo; Back</a></div>
-      <div class="row mt"><select id="fSrc">${srcOpts}</select></div>
+      <div class="row mt"><select id="fSrc">${srcOpts}</select></div>${chSel}
       <div class="row mt">${['all','unanswered','wrong','correct'].map(f=>`<button class="chipbtn ${f===filter?'on':''}" data-f="${f}" type="button">${f}</button>`).join('')}</div>
       <p class="center muted mt">Is filter me koi question nahi.</p></div>`);wire(list);return;}
     const a=amap[q.id],done=a!==undefined;
     setApp(`<div class="card"><div class="row"><a class="chipbtn" href="#/subject/${slug}">&lsaquo; Back</a><span class="muted">${idx+1} / ${list.length}</span><span class="sp"></span><span class="muted">${esc(subjName(slug))}</span></div>
-    <div class="row mt"><select id="fSrc">${srcOpts}</select></div>
+    <div class="row mt"><select id="fSrc">${srcOpts}</select></div>${chSel}
     <div class="row mt">${['all','unanswered','wrong','correct'].map(f=>`<button class="chipbtn ${f===filter?'on':''}" data-f="${f}" type="button">${f}</button>`).join('')}</div></div>
-    <div class="card"><p><span class="badge ${isPYQ(q)?'paid':'free'}">${esc(qLabel(q))}</span></p><p class="qtext">${esc(q.question)}</p>
+    <div class="card"><p><span class="badge ${isPYQ(q)?'paid':'free'}">${esc(qLabel(q))}</span>${chapters.length?`<span class="chap" id="qChapter">${q.chapter?'Chapter: '+esc(q.chapter):'Chapter: not tagged'}</span>`:''}</p><p class="qtext">${esc(q.question)}</p>
     ${q.options.map((o,i)=>`<button class="opt ${done&&i===q.answer?'right':''} ${done&&i===a.chosen&&i!==q.answer?'wrong':''}" data-i="${i}" type="button" ${done?'disabled':''}>${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
     ${done?`<div class="expl"><b>Answer: ${String.fromCharCode(65+q.answer)}</b>${q.explanation?'<br>'+md(q.explanation):''}</div>`:''}
     <div class="row mt"><button class="btn" id="prevB" type="button" ${idx===0?'disabled':''}>&lsaquo; Prev</button><span class="sp"></span><button class="btn" id="nextB" type="button" ${idx>=list.length-1?'disabled':''}>Next &rsaquo;</button></div>
     </div>`);
     wire(list,q);if(window.__keepScroll){window.scrollTo(0,sy);window.__keepScroll=0;}}
   function wire(list,q){document.getElementById('fSrc').onchange=e=>{src=e.target.value;idx=0;render();};
+    const fCh=document.getElementById('fCh');if(fCh)fCh.onchange=e=>{ch=e.target.value;try{localStorage.setItem(CHKEY,ch)}catch(x){}const l1=qs.filter(q=>(src==='all'||qType(q)===src)&&chOk(q));const f1=l1.findIndex(q=>amap[q.id]===undefined);idx=f1>0?f1:0;render();};
     document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;idx=0;render();});
     if(q){document.querySelectorAll('.opt').forEach(b=>b.onclick=async()=>{const i=Number(b.dataset.i);
       const row={user_id:S.session.user.id,question_id:q.id,subject_slug:slug,chosen:i,correct:i===q.answer,mode:'practice'};
