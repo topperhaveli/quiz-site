@@ -243,7 +243,10 @@ async function vHome(){nav('home');await fetchSubjects();
   let resume;
   if(om){const tot=((om.config||{}).question_ids||[]).length,ans=Object.keys(((om.state||{}).answers)||{}).length;
     resume=`<div class="pillbtn">RESUME PAUSED MOCK</div><h2 class="rtitle">${esc(subjName(om.subject_slug))}</h2><p class="rsub">Mock chalu hai - wahin se aage badho.</p><div class="rbar"><span>Mock Progress</span><b>${tot?Math.round(100*ans/tot):0}%</b></div><div class="pbar"><i style="width:${tot?Math.round(100*ans/tot):0}%"></i></div><div class="rfoot"><span class="rmeta">${svg('check','g')} ${ans} of ${tot} answered</span><a class="btn primary" href="#/mockrun/${om.id}">Resume Mock ${svg('arrow')}</a></div>`;}
-  else if(lastSubj){const n=(st.per[lastSubj.slug]||{}).n||0,avail=Math.max(n,(S.qcache[lastSubj.slug]||[]).length||(paid?0:lastSubj.free_question_count)||n);
+  else if(lastSubj){const n=(st.per[lastSubj.slug]||{}).n||0;const full=hasFull(lastSubj.slug);
+    let avail=(S.qcache[lastSubj.slug]||[]).length||(full?0:(lastSubj.free_question_count||0));
+    if(full&&!avail){try{avail=(await fetchQuestionCounts(lastSubj.slug)).length;}catch(e){if(isStale(e)){route();return;}avail=0;}}
+    avail=Math.max(n,avail||n);
     resume=`<div class="pillbtn">RESUME LAST PRACTICE</div><span class="rtime">${svg('clock')} ${fmtAgo(st.last.created_at)}</span><h2 class="rtitle">${esc(lastSubj.name)}</h2><p class="rsub">${n} questions solved in this subject.</p><div class="rbar"><span>Subject Progress</span><b>${avail?Math.round(100*n/avail):0}%</b></div><div class="pbar"><i style="width:${avail?Math.min(100,Math.round(100*n/avail)):0}%"></i></div><div class="rfoot"><span class="rmeta">${svg('check','g')} ${n} of ${avail||'-'} questions done</span><a class="btn primary" href="#/subject/${lastSubj.slug}">Continue Learning ${svg('arrow')}</a></div>`;}
   else{const f=(S.subjects||[])[0];
     resume=`<div class="pillbtn">START HERE</div><h2 class="rtitle">${f?esc(f.name):'Pehla subject chuno'}</h2><p class="rsub">Pehla sawal solve karke apni journey shuru karo.</p><div class="rfoot"><span class="rmeta">${svg('book','g')} ${(S.subjects||[]).length} subjects available</span>${f?`<a class="btn primary" href="#/subject/${f.slug}">Start Learning ${svg('arrow')}</a>`:''}</div>`;}
